@@ -80,6 +80,43 @@ def _person_name(v: Any) -> str:
     return re.sub(r"\s+", "", _clean(v))
 
 
+def _name_candidates(v: Any) -> set[str]:
+    """회원명/미수금 성명 표기가 달라도 같은 사람을 찾기 위한 후보명 집합.
+
+    예) ㈜HRH김남진, ㈜HRH(대표:김남진), HRH(김남진) -> 김남진도 후보로 둔다.
+    회사명+대표자, 괄호, 대표: 표기가 섞인 미수금 파일 전체에 공통 적용한다.
+    """
+    raw = _person_name(v)
+    if not raw:
+        return set()
+    cands: set[str] = {raw}
+
+    # 괄호 안 대표자/이름은 보존해서 후보로 추가
+    for inner in re.findall(r"[\(（]([^\)）]+)[\)）]", raw):
+        inner2 = re.sub(r"^(대표자?|대표[:：]?)", "", inner)
+        inner2 = re.sub(r"[^0-9A-Za-z가-힣]", "", inner2)
+        if inner2:
+            cands.add(inner2)
+
+    norm = raw
+    norm = re.sub(r"[\(（]대표자?[:：]?([^\)）]+)[\)）]", r"\1", norm)
+    norm = re.sub(r"[\(（]([^\)）]+)[\)）]", r"\1", norm)
+    norm = re.sub(r"㈜|\(주\)|주식회사|유한회사|합자회사|대표자?|대표[:：]?", "", norm)
+    norm = re.sub(r"[^0-9A-Za-z가-힣]", "", norm)
+    if norm:
+        cands.add(norm)
+
+    # 영문/숫자 회사명 뒤에 붙은 한글 이름 추출: HRH김남진 -> 김남진
+    for run in re.findall(r"[가-힣]{2,5}", norm):
+        cands.add(run)
+    if re.search(r"[A-Za-z0-9]", norm):
+        m = re.search(r"([가-힣]{2,5})$", norm)
+        if m:
+            cands.add(m.group(1))
+
+    return {x for x in cands if x}
+
+
 def _clip(v: Any, n: int) -> str | None:
     s = _clean(v)
     return s[:n] if s else None
@@ -362,31 +399,22 @@ def _iter_license_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _arrears_header(ws) -> tuple[int, list[tuple[int, str]], dict[str, int]]:
-    """2026년회비내역 헤더를 실제 엑셀 열 번호와 함께 찾는다.
-
-    주의: 이전 코드는 빈 헤더칸을 건너뛴 뒤 enumerate(headers)를 사용해서
-    열 번호가 앞으로 당겨졌다. 그래서 AE열(6월 미수금)을 못 읽고 다른 칸/0원을
-    현재 미수금으로 반영하는 문제가 있었다.
-    headers는 반드시 (0-based column index, header text)로 보관한다.
-    """
+def _arrears_header(ws) -> tuple[int, list[str], dict[str, int]]:
     best = (1, [], {})
-    score_keys = ["지역", "계정", "차량번호", "성명", "이월금"]
-    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=120, values_only=True), start=1):
-        mapping: dict[str, int] = {}
-        headers: list[tuple[int, str]] = []
+    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=80, values_only=True), start=1):
+        mapping = {}
+        headers = []
         for i, v in enumerate(row, start=1):
             h = _clean(v)
             if not h:
                 continue
             h = re.sub(r"\s+", " ", h.replace("\n", " ")).strip()
-            headers.append((i - 1, h))
+            headers.append(h)
             mapping[_norm_col(h)] = i - 1
-        if "차량번호" in mapping and "성명" in mapping:
+        if "차량번호" in mapping and ("성명" in mapping or "성명" in [_norm_col(x) for x in headers]):
             return row_no, headers, mapping
-        score = sum(1 for key in score_keys if key in mapping)
-        best_score = sum(1 for key in score_keys if key in best[2])
-        if score > best_score:
+        score = sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in mapping)
+        if score > sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in best[2]):
             best = (row_no, headers, mapping)
     return best
 
@@ -410,18 +438,19 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         "차량번호": idx("차량번호"), "성명": idx("성명", "성 명", "성     명"),
         "대수": idx("대수"), "이월금": idx("이월금"),
     }
+    # 월별 미수금 컬럼은 빈 헤더/병합셀 때문에 headers 리스트 인덱스로 잡으면 실제 열과 밀릴 수 있다.
+    # 따라서 실제 헤더 행의 엑셀 컬럼 번호를 직접 스캔한다.
     month_cols: dict[int, int] = {}
-    for col_idx, h in headers:
-        # 실제 열 번호를 유지한다. 예: 6월 미수금은 AE열(0-based 30)이어야 한다.
-        norm_h = _clean(h).replace(" ", "")
-        mm = re.search(r"(\d{1,2})월\s*미수금", norm_h)
+    header_values = list(ws.iter_rows(min_row=header_row_no, max_row=header_row_no, max_col=80, values_only=True))[0]
+    for col_idx, h in enumerate(header_values):
+        label = _clean(h).replace(" ", "")
+        mm = re.search(r"(\d{1,2})월.*미수금", label)
         if mm:
             month_cols[int(mm.group(1))] = col_idx
 
-    # 2026미수금 운영 기준: 현재 반영 기준은 6월 미수금(AE열)이다.
-    # 헤더명이 깨져 감지되지 않을 때도 실제 양식의 AE열을 fallback으로 사용한다.
-    if 6 not in month_cols:
-        month_cols[6] = 30  # AE열, 0-based
+    # 2026년회비내역 실제 양식 기준: AE열 = 6월 미수금.
+    # 헤더가 병합/누락되어도 6월 현재잔액은 AE열을 우선 사용한다.
+    month_cols[6] = 30  # AE column, zero-based
 
     rows: list[dict[str, Any]] = []
     for row in ws.iter_rows(min_row=header_row_no + 1, max_col=80, values_only=True):
@@ -437,19 +466,10 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
             val = row[col] if col is not None and col < len(row) else None
             money = _money(val)
             monthly_values[f"{month}월 미수금"] = money
+            # 행별 마지막 입력 월: 0도 입력값이면 해당 월을 기준월로 본다.
             if _has_value(val):
                 last_month = month
                 current_amount = money
-
-        # 가장 중요: 2026년 현재 운영 기준은 AE열 '6월 미수금'이다.
-        # 뒤쪽 빈/0원 컬럼이나 잘못 당겨진 컬럼 때문에 김남진 같은 회원이 0원으로
-        # 들어가지 않도록 6월 미수금 값을 최우선으로 현재잔액에 반영한다.
-        june_col = month_cols.get(6, 30)
-        june_val = row[june_col] if june_col is not None and june_col < len(row) else None
-        if _has_value(june_val):
-            last_month = 6
-            current_amount = _money(june_val)
-            monthly_values["6월 미수금"] = current_amount
         out = {
             "지역": _clean(row[base["지역"]]) if base["지역"] is not None and base["지역"] < len(row) else "",
             "계정": _clean(row[base["계정"]]) if base["계정"] is not None and base["계정"] < len(row) else "",
@@ -531,27 +551,46 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member]]:
-    by_vehicle: dict[str, Member] = {}
+def _member_match_maps(db: Session) -> tuple[dict[str, Member | None], dict[tuple[str, str], Member]]:
+    by_vehicle: dict[str, Member | None] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
+    last4_seen: dict[str, Member | None] = {}
+
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
             by_vehicle[vn] = member
         last4 = _vehicle_last4(member.vehicle_no)
-        nm = _person_name(member.name)
-        if nm and last4:
-            by_name_last4[(nm, last4)] = member
+        if last4:
+            # 미수금 파일 차량번호가 2107처럼 뒤4자리만 있는 경우가 많다.
+            # 뒤4자리가 유일한 경우만 직접 매칭하고, 중복이면 이름 후보로 다시 판별한다.
+            if last4 not in last4_seen:
+                last4_seen[last4] = member
+            else:
+                last4_seen[last4] = None
+            for nm in _name_candidates(member.name):
+                by_name_last4[(nm, last4)] = member
+
+    for last4, member in last4_seen.items():
+        by_vehicle[f"LAST4:{last4}"] = member
     return by_vehicle, by_name_last4
 
 
-def _find_member_from_maps(by_vehicle: dict[str, Member], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
+def _find_member_from_maps(by_vehicle: dict[str, Member | None], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
     vn = _vehicle_norm(vehicle_no)
-    if vn and vn in by_vehicle:
+    if vn and vn in by_vehicle and by_vehicle[vn] is not None:
         return by_vehicle[vn]
-    key = (_person_name(name), _vehicle_last4(vehicle_no))
-    if key[0] and key[1]:
-        return by_name_last4.get(key)
+
+    last4 = _vehicle_last4(vehicle_no)
+    if last4:
+        for nm in _name_candidates(name):
+            member = by_name_last4.get((nm, last4))
+            if member:
+                return member
+        # 차량 뒤4자리가 유일하면 이름 표기가 달라도 매칭한다.
+        member = by_vehicle.get(f"LAST4:{last4}")
+        if member is not None:
+            return member
     return None
 
 
