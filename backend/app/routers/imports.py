@@ -362,22 +362,31 @@ def _iter_license_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _arrears_header(ws) -> tuple[int, list[str], dict[str, int]]:
+def _arrears_header(ws) -> tuple[int, list[tuple[int, str]], dict[str, int]]:
+    """2026년회비내역 헤더를 실제 엑셀 열 번호와 함께 찾는다.
+
+    주의: 이전 코드는 빈 헤더칸을 건너뛴 뒤 enumerate(headers)를 사용해서
+    열 번호가 앞으로 당겨졌다. 그래서 AE열(6월 미수금)을 못 읽고 다른 칸/0원을
+    현재 미수금으로 반영하는 문제가 있었다.
+    headers는 반드시 (0-based column index, header text)로 보관한다.
+    """
     best = (1, [], {})
-    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=80, values_only=True), start=1):
-        mapping = {}
-        headers = []
+    score_keys = ["지역", "계정", "차량번호", "성명", "이월금"]
+    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=120, values_only=True), start=1):
+        mapping: dict[str, int] = {}
+        headers: list[tuple[int, str]] = []
         for i, v in enumerate(row, start=1):
             h = _clean(v)
             if not h:
                 continue
             h = re.sub(r"\s+", " ", h.replace("\n", " ")).strip()
-            headers.append(h)
+            headers.append((i - 1, h))
             mapping[_norm_col(h)] = i - 1
-        if "차량번호" in mapping and ("성명" in mapping or "성명" in [_norm_col(x) for x in headers]):
+        if "차량번호" in mapping and "성명" in mapping:
             return row_no, headers, mapping
-        score = sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in mapping)
-        if score > sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in best[2]):
+        score = sum(1 for key in score_keys if key in mapping)
+        best_score = sum(1 for key in score_keys if key in best[2])
+        if score > best_score:
             best = (row_no, headers, mapping)
     return best
 
@@ -402,10 +411,17 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         "대수": idx("대수"), "이월금": idx("이월금"),
     }
     month_cols: dict[int, int] = {}
-    for i, h in enumerate(headers):
-        mm = re.search(r"(\d{1,2})월\s*미수금", _clean(h).replace(" ", ""))
+    for col_idx, h in headers:
+        # 실제 열 번호를 유지한다. 예: 6월 미수금은 AE열(0-based 30)이어야 한다.
+        norm_h = _clean(h).replace(" ", "")
+        mm = re.search(r"(\d{1,2})월\s*미수금", norm_h)
         if mm:
-            month_cols[int(mm.group(1))] = i
+            month_cols[int(mm.group(1))] = col_idx
+
+    # 2026미수금 운영 기준: 현재 반영 기준은 6월 미수금(AE열)이다.
+    # 헤더명이 깨져 감지되지 않을 때도 실제 양식의 AE열을 fallback으로 사용한다.
+    if 6 not in month_cols:
+        month_cols[6] = 30  # AE열, 0-based
 
     rows: list[dict[str, Any]] = []
     for row in ws.iter_rows(min_row=header_row_no + 1, max_col=80, values_only=True):
@@ -421,10 +437,19 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
             val = row[col] if col is not None and col < len(row) else None
             money = _money(val)
             monthly_values[f"{month}월 미수금"] = money
-            # 행별 마지막 입력 월: 0도 입력값이면 해당 월을 기준월로 본다.
             if _has_value(val):
                 last_month = month
                 current_amount = money
+
+        # 가장 중요: 2026년 현재 운영 기준은 AE열 '6월 미수금'이다.
+        # 뒤쪽 빈/0원 컬럼이나 잘못 당겨진 컬럼 때문에 김남진 같은 회원이 0원으로
+        # 들어가지 않도록 6월 미수금 값을 최우선으로 현재잔액에 반영한다.
+        june_col = month_cols.get(6, 30)
+        june_val = row[june_col] if june_col is not None and june_col < len(row) else None
+        if _has_value(june_val):
+            last_month = 6
+            current_amount = _money(june_val)
+            monthly_values["6월 미수금"] = current_amount
         out = {
             "지역": _clean(row[base["지역"]]) if base["지역"] is not None and base["지역"] < len(row) else "",
             "계정": _clean(row[base["계정"]]) if base["계정"] is not None and base["계정"] < len(row) else "",
