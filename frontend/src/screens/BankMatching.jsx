@@ -76,76 +76,110 @@ function DepositDetail({deposit}){
   </tr>
 }
 
-function ManualMatchModal({deposit, members, onClose, onMatch}){
+function ManualMatchModal({deposit, members, onClose, onMatch, onIncomeOnly, onExclude}){
   const [q,setQ]=useState('')
   const [chargeItem,setChargeItem]=useState(()=>inferChargeItem(deposit?.bestCandidate, deposit))
   const candidates = deposit?.candidates || []
+  const hasQuery = q.trim().length > 0
+  const isNonArrears = ['협회가입비','자격증명발급비','기타'].includes(chargeItem)
   const memberRows = useMemo(()=>{
     const base = (members || []).filter(m => m.status === '정상')
-    if(!q.trim()) return base.slice(0, 100)
+    if(!q.trim()) return []
     const s = normalizeText(q)
-    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone].join('')).includes(s)).slice(0,100)
+    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, m.sigun].join('')).includes(s)).slice(0,60)
   },[members,q])
   if(!deposit) return null
   return <div className="modal-bg">
-    <div className="modal wide match-modal">
+    <div className="modal wide match-modal clean-match-modal">
       <div className="modal-title-row">
         <div>
           <h2>후보 확인 / 수동매칭</h2>
-          <p>추천 후보가 맞으면 바로 수납반영하고, 아니면 회원을 검색해서 선택하세요.</p>
+          <p>자동 후보가 애매하면 회원을 검색해서 선택하세요. 관련 없는 회원 목록은 기본으로 펼치지 않습니다.</p>
         </div>
         <button className="btn" onClick={onClose}>닫기</button>
       </div>
 
-      <div className="compact-summary four">
-        <div><b>입금자명</b><strong>{deposit.depositorName || '-'}</strong></div>
-        <div><b>입금액</b><strong>{formatWon(deposit.amount)}</strong></div>
-        <div><b>거래일자</b><strong>{deposit.depositDate || '-'}</strong></div>
-        <div><b>상태</b><strong><StatusBadge status={getStatus(deposit)}/></strong></div>
+      <div className="deposit-hero">
+        <div><span>입금자명</span><b>{deposit.depositorName || '-'}</b></div>
+        <div><span>입금액</span><b>{formatWon(deposit.amount)}</b></div>
+        <div><span>거래일자</span><b>{deposit.depositDate || '-'}</b></div>
+        <div><span>상태</span><StatusBadge status={getStatus(deposit)}/></div>
       </div>
-      <div className="income-select-panel">
+
+      <div className="match-guide-box">
+        <b>이 입금건 처리 방법</b>
+        <div>
+          <span>① 추천 후보가 맞으면 <b>반영</b></span>
+          <span>② 없으면 아래에서 <b>회원 검색 후 선택</b></span>
+          <span>③ 협회가입비/발급비/기타수입이면 항목만 바꾼 뒤 회원을 선택</span>
+          <span>④ 협회 입금이 아니면 <b>제외</b></span>
+        </div>
+      </div>
+
+      <div className="income-select-panel clean-income">
         <div>
           <b>수납항목</b>
-          <p>협회가입비/자격증명발급비는 미수금 차감 없이 수납내역에만 기록됩니다.</p>
+          <p>{isNonArrears ? '선택한 항목은 미수금 차감 없이 수납내역에만 기록됩니다. 회원과 무관한 입금이면 오른쪽 단독 반영을 누르세요.' : '협회비/관리비는 선택 회원의 미수금에서 차감됩니다.'}</p>
         </div>
         <select className="select" value={chargeItem} onChange={e=>setChargeItem(e.target.value)}>
           {INCOME_ITEMS.map(item => <option key={item.value} value={item.value}>{item.label} · {item.accounting}</option>)}
         </select>
         <Badge tone={itemTone(chargeItem)}>{accountingType(chargeItem)}</Badge>
+        {isNonArrears && <button className="btn green income-only-btn" onClick={()=>{
+          const label = `${chargeItem}(${accountingType(chargeItem)})`
+          if(confirm(`회원 선택 없이 ${label} ${formatWon(deposit.amount)}을 반영할까요?`)){
+            onIncomeOnly?.(deposit.id, chargeItem)
+          }
+        }}>회원 없이 {accountingType(chargeItem)} 반영</button>}
       </div>
 
       {candidates.length ? <>
-        <div className="section-title compact-title">추천 후보</div>
-        <div className="admin-table-wrap modal-table-scroll">
-          <table className="admin-table dense"><thead><tr><th>회원</th><th>차량번호</th><th>관리번호</th><th>매칭근거</th><th className="right">현재미수</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
-            {candidates.map(c=><tr key={c.id}>
-              <td><b>{c.name}</b></td>
-              <td>{c.vehicleNo || c.vehicle_no || '-'}</td>
-              <td>{c.mgmtNo || c.mgmt_no || '-'}</td>
-              <td className="muted-cell">{shortText(c.reason || c.reasons?.join(' · ') || '-', 52)}</td>
-              <td className="right money">{formatWon(c.totalArrears || c.arrears_amount)}</td>
-              <td className="right">{diffText(c.diff)}</td>
-              <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, c.id, chargeItem)}>반영</button></td>
-            </tr>)}
-          </tbody></table>
+        <div className="section-title compact-title">추천 후보 <span>근거가 있는 후보만 표시</span></div>
+        <div className="candidate-card-list">
+          {candidates.map(c=>{
+            const arrears = Number(c.totalArrears || c.arrears_amount || 0)
+            return <div className="candidate-card" key={c.id}>
+              <div className="candidate-main">
+                <b>{c.name}</b>
+                <span>{c.vehicleNo || c.vehicle_no || '-'} · {c.mgmtNo || c.mgmt_no || '-'}</span>
+                <em>{shortText(c.reason || c.reasons?.join(' · ') || '-', 72)}</em>
+              </div>
+              <div className="candidate-money">
+                <span>현재미수</span>
+                <b>{formatWon(arrears)}</b>
+                <em>{diffText(c.diff)}</em>
+              </div>
+              <button className="btn green" onClick={()=>onMatch(deposit.id, c.id, chargeItem)}>이 후보로 반영</button>
+            </div>
+          })}
         </div>
-      </> : null}
+      </> : <div className="no-candidate-box">추천 후보가 없습니다. 아래 검색창에 이름, 차량번호 뒤4자리, 관리번호, 전화번호를 입력하세요.</div>}
 
-      <div className="section-title compact-title">회원 검색</div>
-      <input className="input full" value={q} onChange={e=>setQ(e.target.value)} placeholder="이름 / 차량번호 / 관리번호 / 전화번호 검색" />
-      <div className="admin-table-wrap modal-table-scroll mt8">
-        <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
-          {memberRows.map(m=><tr key={m.id}>
-            <td><b>{m.name}</b></td>
-            <td>{m.sigun || '-'}</td>
-            <td>{m.vehicleNo || m.vehicle_no || '-'}</td>
-            <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
-            <td>{m.membership || '-'}</td>
-            <td className="right money">{formatWon(m.totalArrears)}</td>
-            <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id, chargeItem)}>선택</button></td>
-          </tr>)}
-          {!memberRows.length && <tr><td colSpan={7} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
-        </tbody></table>
+      <div className="manual-search-panel">
+        <div className="section-title compact-title">회원 검색 <span>검색어 입력 전에는 아무 목록도 보여주지 않습니다</span></div>
+        <input className="input full" value={q} onChange={e=>setQ(e.target.value)} autoFocus placeholder="이름 / 차량번호 뒤4자리 / 관리번호 / 전화번호 검색" />
+        {!hasQuery ? <div className="search-empty-help">예: 김남진, 2107, 신25-81, 010 뒤4자리</div> :
+          <div className="manual-result-list">
+            {memberRows.map(m=>{
+              const arrears = Number(m.totalArrears || 0)
+              return <div className="manual-member-row" key={m.id}>
+                <div>
+                  <b>{m.name}</b>
+                  <span>{m.sigun || '-'} · {m.vehicleNo || m.vehicle_no || '-'} · {m.mgmtNo || m.mgmt_no || '-'}</span>
+                  <em>{m.membership || '-'} / {m.phone || '-'}</em>
+                </div>
+                <div className={arrears < 0 ? 'money advance' : 'money'}>{formatWon(arrears)}</div>
+                <button className="btn green" onClick={()=>onMatch(deposit.id, m.id, chargeItem)}>선택 반영</button>
+              </div>
+            })}
+            {!memberRows.length && <div className="empty-cell compact">검색 결과가 없습니다. 이름 일부나 차량번호 숫자만 다시 입력해보세요.</div>}
+          </div>
+        }
+      </div>
+
+      <div className="modal-bottom-actions">
+        <button className="btn" onClick={onClose}>닫기</button>
+        <button className="btn danger-soft" onClick={()=>{ if(confirm('이 입금건을 통장매칭 대상에서 제외할까요?')) { onExclude?.(deposit.id); onClose(); }}}>이 입금건 제외</button>
       </div>
     </div>
   </div>
@@ -223,7 +257,7 @@ function PasteDepositModal({onClose, onSaved}){
   </div>
 }
 
-export default function BankMatching({data, matchDeposit, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
+export default function BankMatching({data, matchDeposit, matchDepositIncome, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
   const [q,setQ]=useState('')
   const [status,setStatus]=useState('전체')
   const [resetKey,setResetKey]=useState(0)
@@ -267,6 +301,11 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
 
   async function doMatch(depositId, memberId, chargeItem=null){
     await matchDeposit(depositId, memberId, chargeItem)
+    setModal(null)
+  }
+
+  async function doIncomeOnly(depositId, chargeItem='기타'){
+    await matchDepositIncome?.(depositId, chargeItem)
     setModal(null)
   }
 
@@ -387,7 +426,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
         </div>
       </div>
     </Card>
-    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch}/>
+    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch} onIncomeOnly={doIncomeOnly} onExclude={excludeDeposit}/>
     {showPaste && <PasteDepositModal onClose={()=>setShowPaste(false)} onSaved={reloadFromDb}/>}
   </div>
 }

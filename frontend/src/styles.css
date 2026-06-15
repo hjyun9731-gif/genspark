@@ -632,3 +632,49 @@ body{letter-spacing:-.015em}
 .income-select-panel b{display:block;font-size:13px;color:var(--ink);margin-bottom:2px}
 .income-select-panel p{margin:0;color:var(--muted);font-size:12.5px}
 @media(max-width:760px){.income-select-panel{grid-template-columns:1fr}}
+
+/* ============================================================
+   통장매칭 후보확인/수동매칭 모달 · 실무형 재정리
+   - 관련 없는 회원을 기본으로 펼치지 않음
+   - 추천후보/회원검색/제외 흐름을 명확히 분리
+   ============================================================ */
+.clean-match-modal{max-width:920px}
+.deposit-hero{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:10px;margin:14px 0 12px}
+.deposit-hero>div{border:1px solid var(--line);background:var(--panel-soft);border-radius:12px;padding:12px 14px;min-width:0}
+.deposit-hero span{display:block;font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:5px}
+.deposit-hero b{display:block;font-size:18px;color:var(--ink);font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match-guide-box{border:1px solid #e4e7f7;background:#f7f8ff;border-radius:13px;padding:12px 14px;margin-bottom:12px}
+.match-guide-box>b{display:block;font-size:13px;color:var(--ink);margin-bottom:8px}
+.match-guide-box>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.match-guide-box span{font-size:12.5px;color:var(--text)}
+.clean-income{margin:0 0 14px 0}
+.candidate-card-list{display:grid;gap:9px;max-height:250px;overflow:auto;padding-right:3px;margin-bottom:16px}
+.candidate-card{display:grid;grid-template-columns:1fr 150px auto;gap:12px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px}
+.candidate-card:hover{background:#fafbff;border-color:var(--primary-line)}
+.candidate-main{min-width:0}
+.candidate-main b{display:block;font-size:14.5px;color:var(--ink);font-weight:800;margin-bottom:3px}
+.candidate-main span{display:block;font-size:12.5px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.candidate-main em{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.candidate-money{text-align:right;white-space:nowrap}
+.candidate-money span{display:block;font-size:11px;color:var(--sub);font-weight:700}
+.candidate-money b{display:block;font-size:15px;color:var(--danger);font-weight:800}
+.candidate-money em{display:block;font-style:normal;font-size:11.5px;color:var(--muted)}
+.no-candidate-box,.search-empty-help{border:1px dashed var(--line-strong);background:var(--panel-soft);border-radius:12px;padding:14px;text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px}
+.manual-search-panel{border-top:1px solid var(--line-soft);padding-top:14px}
+.manual-result-list{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px;max-height:300px;overflow-y:auto;background:#fff}
+.manual-member-row{display:grid;grid-template-columns:1fr 110px auto;gap:12px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--line-soft)}
+.manual-member-row:last-child{border-bottom:0}
+.manual-member-row:hover{background:#fafbff}
+.manual-member-row>div:first-child{min-width:0}
+.manual-member-row b{display:block;font-size:14px;color:var(--ink);font-weight:800}
+.manual-member-row span{display:block;font-size:12.5px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.manual-member-row em{display:block;font-style:normal;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.manual-member-row .money{text-align:right;font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap}
+.manual-member-row .money.advance{color:var(--ok)}
+.modal-bottom-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line-soft)}
+@media(max-width:760px){
+  .deposit-hero{grid-template-columns:1fr 1fr}
+  .match-guide-box>div{grid-template-columns:1fr}
+  .candidate-card,.manual-member-row{grid-template-columns:1fr;align-items:start}
+  .candidate-money,.manual-member-row .money{text-align:left}
+}

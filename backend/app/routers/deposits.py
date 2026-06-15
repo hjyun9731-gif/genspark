@@ -15,7 +15,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Deposit, Member, MemberHistory, Payment, ReceivableItem
+from ..models import Deposit, Member, MemberHistory, Payment
 from ..schemas import DepositMatch
 
 router = APIRouter(prefix="/api/deposits", tags=["deposits"])
@@ -46,6 +46,40 @@ def _infer_income_item(deposit: Deposit, member: Member | None = None) -> str:
         return "자격증명발급비"
     return (member.charge_item if member and member.charge_item else "관리비")
 
+
+
+
+def _ensure_income_member(db: Session) -> Member:
+    """회원과 무관한 잡수입/기타수입을 수납내역에 남기기 위한 내부용 가상 회원."""
+    member = db.get(Member, "SYS-INCOME")
+    if member is not None:
+        return member
+    member = Member(
+        id="SYS-INCOME",
+        mgmt_no="수입-0000",
+        reg_type="기타",
+        name="회원외 수입",
+        vehicle_no="-",
+        phone=None,
+        sigun="기타",
+        region_raw="기타",
+        member_type="기타",
+        membership="기타",
+        birth_year=None,
+        cert_issue_date=None,
+        assoc_join_date=None,
+        billing_start_ym=None,
+        charge_item="기타",
+        monthly_charge=0,
+        last_payment_ym=None,
+        status="수입",
+        is_disconnected=False,
+        cert_missing=False,
+        memo="회원 선택 없이 처리한 잡수입/기타수입 전용 내부 계정",
+    )
+    db.add(member)
+    db.flush()
+    return member
 
 def _ym_from_date(d: date | None) -> str:
     d = _safe_deposit_date(d) if d else date.today()
@@ -366,14 +400,12 @@ def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(
             item.amount -= pay_amount
         member.last_payment_ym = item.ym
 
-    # 미수 0원 회원/초과납부도 가능하다. 남은 금액은 선납(-현재잔액)으로 기록해 명단에서 확인되게 한다.
-    if remain > 0:
-        paid_for_ym = _ym_from_date(paid_date)
-        db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        db.add(ReceivableItem(member_id=member.id, ym=paid_for_ym, charge_item=charge_item, amount=-remain, is_paid=False))
-        applied += remain
-        history = f"통장매칭 {charge_item} 선납/초과입금 {remain:,}원 / 현재잔액 -{remain:,}원"
+    # 미수 0원 회원도 납부 가능하다. 협회비/관리비 추가입금은 선납/추가입금 수납내역으로 남긴다.
+    if applied <= 0 and remain > 0:
+        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=charge_item, amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
+        applied = remain
         remain = 0
+        history = f"통장매칭 {charge_item} 선납/추가입금 {applied:,}원"
     else:
         history = f"통장매칭 수납 반영 {applied:,}원 (입금자 {deposit.depositor_name}, 차액 {remain:,}원)"
 
@@ -383,6 +415,45 @@ def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(
     db.add(MemberHistory(member_id=member.id, content=history, actor="system"))
     db.commit()
     return {"ok": True, "deposit_id": deposit.id, "member_id": member.id, "applied": applied, "remain": remain}
+
+
+@router.post("/{deposit_id}/income")
+def match_deposit_income_only(deposit_id: int, payload: dict = Body(...), db: Session = Depends(get_db)):
+    """회원 선택 없이 잡수입/기타수입/가수금으로 입금건을 반영한다.
+
+    협회비/관리비처럼 미수금을 차감하는 항목은 회원이 필수이므로 이 API에서 막는다.
+    """
+    deposit = db.get(Deposit, deposit_id)
+    if deposit is None:
+        raise HTTPException(status_code=404, detail="입금내역을 찾을 수 없습니다.")
+    if deposit.is_excluded:
+        raise HTTPException(status_code=400, detail="제외 처리된 입금건은 반영할 수 없습니다.")
+
+    charge_item = (payload or {}).get("charge_item") or "기타"
+    if not _is_non_arrears_income(charge_item):
+        raise HTTPException(status_code=400, detail="협회비/관리비는 회원 선택 후 반영해야 합니다.")
+
+    paid_date = _safe_deposit_date(deposit.deposit_date)
+    amount = int(deposit.amount or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="입금액이 0원인 거래는 반영할 수 없습니다.")
+
+    income_member = _ensure_income_member(db)
+    db.add(Payment(
+        member_id=income_member.id,
+        paid_for_ym=_ym_from_date(paid_date),
+        charge_item=charge_item,
+        amount=amount,
+        method="통장매칭",
+        paid_date=paid_date,
+        deposit_id=deposit.id,
+    ))
+    deposit.status = "매칭완료"
+    deposit.matched_member_id = income_member.id
+    deposit.hint = f"회원 없이 {charge_item}({_accounting_type(charge_item)}) {amount:,}원 반영"
+    db.add(MemberHistory(member_id=income_member.id, content=f"통장매칭 회원외 {charge_item}({_accounting_type(charge_item)}) 수납 {amount:,}원", actor="system"))
+    db.commit()
+    return {"ok": True, "deposit_id": deposit.id, "member_id": income_member.id, "applied": amount, "remain": 0, "non_arrears": True, "income_only": True, "accounting_type": _accounting_type(charge_item)}
 
 
 @router.post("/{deposit_id}/exclude")
