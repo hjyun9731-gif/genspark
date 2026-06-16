@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Badge, Card, PageHead, formatWon, formatNum } from '../components.jsx'
 import { SIGUN, getOpenArrears } from '../data.js'
 
@@ -127,6 +127,7 @@ function makeMemoFromFields(fields){
 }
 
 export default function ReceivablesList({ data, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure }){
+  const [searchInput, setSearchInput] = useState(preset?.q || '')
   const [q, setQ] = useState(preset?.q || '')
   const [sigun, setSigun] = useState(preset?.sigun || '전체')
   const [membership, setMembership] = useState('전체')
@@ -144,8 +145,17 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const [paymentMember, setPaymentMember] = useState(null)
   const [highlightMemberId, setHighlightMemberId] = useState(preset?.memberId || null)
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQ(searchInput)
+      setPage(1)
+    }, 220)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
+
   React.useEffect(() => {
     if (!preset) return
+    setSearchInput(preset.q || '')
     setQ(preset.q || '')
     setSigun(preset.sigun || '전체')
     setAmount(preset.amount || '전체')
@@ -235,6 +245,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   function paymentsFor(member){ return memberPayments(data, member) }
 
   function resetFilters(){
+    setSearchInput('')
     setQ('')
     setSigun('전체')
     setMembership('전체')
@@ -280,7 +291,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
 
     <Card className="admin-control-card">
       <div className="admin-filter-row">
-        <input className="input admin-search" value={q} onChange={e => { setQ(e.target.value); setPage(1) }} placeholder="이름, 차량번호, 관리번호, 핸드폰번호, 주소 검색" />
+        <input className="input admin-search" value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder="이름, 차량번호, 관리번호, 핸드폰번호, 주소 검색" />
         <select className="select" value={sigun} onChange={e => { setSigun(e.target.value); setPage(1) }}>
           <option value="전체">전체 지역</option>
           {SIGUN.map(name => <option key={name} value={name}>{name}</option>)}

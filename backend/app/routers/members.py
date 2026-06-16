@@ -37,6 +37,19 @@ def _date_iso(d: date | None) -> str | None:
     return fixed.isoformat() if fixed else None
 
 
+def _add_months_same_day(d: date, months: int) -> date:
+    y = d.year + (d.month - 1 + months) // 12
+    m = (d.month - 1 + months) % 12 + 1
+    # 말일 보정
+    import calendar
+    last = calendar.monthrange(y, m)[1]
+    return date(y, m, min(d.day, last))
+
+
+def _ym(d: date) -> str:
+    return d.strftime("%Y-%m")
+
+
 NON_ARREARS_INCOME_ITEMS = {"협회가입비", "자격증명발급비", "기타"}
 
 
@@ -63,12 +76,69 @@ def _open_items(member: Member) -> list[ReceivableItem]:
     return sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount > 0], key=lambda x: x.ym)
 
 
+def _billing_basis_date(member: Member) -> date | None:
+    if member.charge_item == "협회비" or member.membership == "협회가입":
+        return _fix_reversed_future_date(member.assoc_join_date)
+    return _fix_reversed_future_date(member.cert_issue_date)
+
+
+def _virtual_due_items(member: Member, today: date | None = None) -> list[dict]:
+    """엑셀 미수금 원장에 아직 잡히지 않은 이번달 도래분을 화면/수납용으로 계산한다.
+
+    예: 부과기준일 2026-05-15, 오늘 2026-06-15 이후면 2026-06 관리비 5,000원 표시.
+    DB receivable_items에 이미 같은 기준월이 있으면 중복 생성하지 않는다.
+    """
+    today = today or date.today()
+    if member.status != "정상":
+        return []
+    if _is_non_arrears_income(member.charge_item):
+        return []
+    monthly = int(member.monthly_charge or 0)
+    if monthly <= 0:
+        return []
+    basis = _billing_basis_date(member)
+    if not basis:
+        return []
+    first_due = _add_months_same_day(basis, 1)
+    if today < first_due:
+        return []
+
+    existing_ym = {x.ym for x in member.receivable_items}
+    paid_by_ym: dict[str, int] = {}
+    for p in getattr(member, "payments", []) or []:
+        if p.charge_item == member.charge_item:
+            paid_by_ym[p.paid_for_ym] = paid_by_ym.get(p.paid_for_ym, 0) + int(p.amount or 0)
+
+    items: list[dict] = []
+    cur = first_due
+    # 최초 부과일부터 현재까지 매월 같은 일자가 도래한 분만 계산
+    while cur <= today:
+        ym = _ym(cur)
+        if ym not in existing_ym:
+            amount = monthly - paid_by_ym.get(ym, 0)
+            if amount != 0:
+                items.append({
+                    "id": f"virtual-{member.id}-{ym}",
+                    "ym": ym,
+                    "charge_item": member.charge_item,
+                    "item": member.charge_item,
+                    "amount": amount,
+                    "is_paid": amount <= 0,
+                    "paid": amount <= 0,
+                    "virtual": True,
+                })
+        cur = _add_months_same_day(cur, 1)
+    return items
+
+
 def _member_dict(member: Member, detail: bool = False) -> dict:
-    open_items = _open_items(member)  # 실제 수납 처리 대상: 양수 미수항목만
+    db_open_items = _open_items(member)  # 실제 DB 수납 처리 대상: 양수 미수항목
+    virtual_items = _virtual_due_items(member)
+    open_items = sorted(db_open_items + [x for x in virtual_items if x["amount"] > 0], key=lambda x: x.ym if hasattr(x, "ym") else x["ym"])
     balance_items = sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount != 0], key=lambda x: x.ym)
     paid_items = [x for x in member.receivable_items if x.is_paid]
-    # 미수금명단 표시용 현재잔액: 0원/선입금(-금액)도 회원이 사라지면 안 되므로 음수까지 반영한다.
-    arrears_amount = sum(x.amount for x in balance_items)
+    # 미수금명단 표시용 현재잔액: DB 미수 + 부과일 도래 가상미수
+    arrears_amount = sum(x.amount for x in balance_items) + sum(x["amount"] for x in virtual_items)
     out = {
         # DB 원본 필드
         "id": member.id,
@@ -113,14 +183,12 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         "updatedAt": member.updated_at.isoformat() if member.updated_at else "",
     }
     if detail:
-        out["receivable_items"] = [
+        real_receivables = [
             {"id": x.id, "ym": x.ym, "label": f"현재잔액({x.ym})", "charge_item": x.charge_item, "item": x.charge_item, "amount": x.amount, "is_paid": x.is_paid, "paid": x.is_paid}
             for x in sorted(member.receivable_items, key=lambda x: x.ym)
         ]
-        out["arrears"] = [
-            {"id": x.id, "ym": x.ym, "label": f"현재잔액({x.ym})", "charge_item": x.charge_item, "item": x.charge_item, "amount": x.amount, "is_paid": x.is_paid, "paid": x.is_paid}
-            for x in sorted(member.receivable_items, key=lambda x: x.ym)
-        ]
+        out["receivable_items"] = sorted(real_receivables + [dict(x, label=f"현재잔액({x['ym']})") for x in virtual_items], key=lambda x: x["ym"])
+        out["arrears"] = out["receivable_items"]
         out["payments"] = [
             {"id": p.id, "memberId": p.member_id, "paid_for_ym": p.paid_for_ym, "paidForYm": p.paid_for_ym, "charge_item": p.charge_item, "chargeItem": p.charge_item, "amount": p.amount, "method": p.method, "paid_date": p.paid_date.isoformat(), "paidDate": p.paid_date.isoformat()}
             for p in sorted(member.payments, key=lambda p: p.paid_date, reverse=True)
@@ -129,7 +197,7 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         out["arrears"] = [
             {"id": x.id, "ym": x.ym, "label": f"현재잔액({x.ym})", "item": x.charge_item, "amount": x.amount, "paid": x.is_paid}
             for x in balance_items[:12]
-        ]
+        ] + [{"id": x["id"], "ym": x["ym"], "label": f"현재잔액({x['ym']})", "item": x["item"], "amount": x["amount"], "paid": x["paid"], "virtual": True} for x in virtual_items[:12]]
     return out
 
 
@@ -276,13 +344,15 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
             item.amount -= pay_amount
         member.last_payment_ym = item.ym
 
-    # 미수 없는 회원에게 협회비/관리비를 추가로 받은 경우도 선납/추가입금으로 기록한다.
+    # DB 미수항목은 없지만 부과일이 도래한 가상 미수가 있으면 그 기준월로 수납 기록한다.
     if applied <= 0 and remain > 0:
-        paid_for_ym = payload.paid_for_ym or _ym_from_date(paid_date)
+        virtual_due = [x for x in _virtual_due_items(member, paid_date) if x["amount"] > 0]
+        paid_for_ym = payload.paid_for_ym or (virtual_due[0]["ym"] if virtual_due else _ym_from_date(paid_date))
         db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
         applied = remain
         remain = 0
-        db.add(MemberHistory(member_id=member.id, content=f"{charge_item} 선납/추가입금 {applied:,}원", actor="system"))
+        msg = "수납 반영" if virtual_due else "선납/추가입금"
+        db.add(MemberHistory(member_id=member.id, content=f"{charge_item} {msg} {applied:,}원", actor="system"))
     else:
         db.add(MemberHistory(member_id=member.id, content=f"수납 반영 {applied:,}원 / 미수항목 {paid_count}건 완납", actor="system"))
     db.commit()
