@@ -58,6 +58,13 @@ function normalizeText(v){
   return String(v || '').replace(/\s+/g, '').toLowerCase()
 }
 
+function memberSearchText(m){
+  return normalizeText([
+    m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, m.sigun,
+    m.memo, m.note, m.remark, m.remarks
+  ].join(' '))
+}
+
 function shortText(v, n = 42){
   const s = String(v || '-').trim()
   return s.length > n ? `${s.slice(0, n)}…` : s
@@ -88,7 +95,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch, onIncomeOnly, onG
     const base = (members || []).filter(m => m.status === '정상')
     if(!q.trim()) return []
     const s = normalizeText(q)
-    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, m.sigun].join('')).includes(s)).slice(0,60)
+    return base.filter(m => memberSearchText(m).includes(s)).slice(0,60)
   },[members,q])
   if(!deposit) return null
   return <div className="modal-bg">
@@ -193,6 +200,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch, onIncomeOnly, onG
                   <b>{m.name}</b>
                   <span>{m.sigun || '-'} · {m.vehicleNo || m.vehicle_no || '-'} · {m.mgmtNo || m.mgmt_no || '-'}</span>
                   <em>{m.membership || '-'} / {m.phone || '-'}</em>
+                  {m.memo ? <em>비고: {shortText(m.memo, 42)}</em> : null}
                 </div>
                 <div className={arrears < 0 ? 'money advance' : 'money'}>{formatWon(arrears)}</div>
                 <button className="btn green" onClick={()=>onMatch(deposit.id, m.id, chargeItem)}>선택 반영</button>

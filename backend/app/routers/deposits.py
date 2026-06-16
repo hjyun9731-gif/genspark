@@ -315,6 +315,93 @@ def _text_for_match(deposit: Deposit) -> str:
     return _name_norm(f"{deposit.depositor_name or ''} {deposit.memo or ''}")
 
 
+# 비고란/메모에서 입금자 별칭을 추출해 통장매칭 후보에 사용한다.
+# 예: "이체 정 홍 영" / "김 혜 숙, 신 대 균" / "공: 김강훈" / "오 영 숙"
+# 단, "15일이체", "계좌적기", "지로x" 같은 업무 메모는 별칭으로 쓰지 않는다.
+ALIAS_STOP_WORDS = {
+    "이체", "자동이체", "계좌적기", "계좌번호적기", "계좌번호", "계좌문자발송",
+    "지로", "지로X", "지로x", "문자발송", "문자발송X", "문자발송x",
+    "가족양도", "신평", "합동", "속초개인용달", "강릉시", "인제군", "고성군",
+    "양양지역자활센터", "영월지역자활센터", "수현화물", "해광공업사", "설악안전",
+    "한진택배", "택배", "부과", "이어서", "이어져", "이이서", "계좌", "지점코드",
+    "출연금", "미납", "포함", "감면", "감액", "신규등록", "공문", "공",
+}
+
+ALIAS_ADMIN_PATTERNS = [
+    r"\d+\s*일\s*이체",
+    r"\d+개월\s*단위",
+    r"\d+개월마다",
+    r"\d+년치",
+    r"\d+에\s*이어[서져]?",
+    r"\d+\s*이어서",
+    r"\d+\s*이이서",
+    r"\d+\s*부터",
+    r"\d+\s*월",
+    r"\d+\s*대\s*->\s*\d+\s*대",
+    r"지점코드\s*\d+",
+]
+
+
+def _hangul_name_norm(v: str | None) -> str:
+    return re.sub(r"[^가-힣]", "", v or "")
+
+
+def _remark_aliases(member: Member) -> list[str]:
+    """회원 memo/비고에서 통장 입금자 별칭을 뽑는다.
+
+    전체면허자현황 업로드 시 비고는 Member.memo 안에 '비고:...' 형태로 저장된다.
+    여기서 사람 이름처럼 보이는 2~5글자 한글 토큰을 별칭으로 둔다.
+    행정 메모(이체, 계좌적기, 15일이체 등)는 제외한다.
+    """
+    raw = member.memo or ""
+    if not raw:
+        return []
+    # 비고/전화메모 영역 위주로 보되, 기존 데이터 호환을 위해 전체 memo에서도 추출한다.
+    chunks = []
+    for m in re.finditer(r"(?:비고\d*|전화\s*메모)\s*[:：]\s*([^/]+)", raw):
+        chunks.append(m.group(1))
+    if not chunks:
+        chunks = [raw]
+
+    aliases: list[str] = []
+    member_name_norm = _hangul_name_norm(member.name)
+    for chunk in chunks:
+        text = str(chunk or "").replace("\u3000", " ")
+        for pat in ALIAS_ADMIN_PATTERNS:
+            text = re.sub(pat, " ", text, flags=re.I)
+        # 콤마/슬래시/콜론으로 구분되는 이름들: "김 혜 숙, 신 대 균" / "이체, 조 종 철"
+        # 따옴표 안의 이름도 같이 처리
+        tokens = re.split(r"[,/|;·]+", text)
+        for token in tokens:
+            t = token.strip()
+            if not t:
+                continue
+            # 업무 키워드는 제거하고 남은 한글 이름만 본다.
+            for stop in sorted(ALIAS_STOP_WORDS, key=len, reverse=True):
+                t = re.sub(re.escape(stop), " ", t, flags=re.I)
+            # '이체 정 홍 영', '공: 김강훈', '윤 갑 순' 같은 형태
+            for name in re.findall(r"[가-힣](?:\s*[가-힣]){1,4}", t):
+                alias = _hangul_name_norm(name)
+                if not (2 <= len(alias) <= 5):
+                    continue
+                if alias == member_name_norm:
+                    continue
+                if alias in ALIAS_STOP_WORDS:
+                    continue
+                # 지역/단체성 단어 제외
+                if alias.endswith(("시", "군", "센터", "화물", "용달", "공업사", "정비", "협동조합")):
+                    continue
+                aliases.append(alias)
+    # 중복 제거, 긴 이름 우선
+    seen = set()
+    out = []
+    for a in sorted(aliases, key=lambda x: (-len(x), x)):
+        if a not in seen:
+            seen.add(a)
+            out.append(a)
+    return out[:8]
+
+
 @dataclass
 class Candidate:
     member: Member
@@ -373,11 +460,17 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
         last4 = _vehicle_last4(member.vehicle_no)
         phone4 = _digits(member.phone)[-4:] if member.phone else ""
         mgmt = _name_norm(member.mgmt_no)
+        aliases = _remark_aliases(member)
 
         if nm and nm in text:
             score += 55
             primary_match = True
             reasons.append("이름일치")
+        matched_alias = next((a for a in aliases if _name_norm(a) and _name_norm(a) in text), None)
+        if matched_alias:
+            score += 48
+            primary_match = True
+            reasons.append(f"비고별칭:{matched_alias}")
         if last4 and last4 in dep_digits:
             score += 50
             primary_match = True
