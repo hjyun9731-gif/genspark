@@ -133,6 +133,10 @@ export default function App() {
     try{ await api.matchDepositIncome(depositId,{charge_item:chargeItem}); await reloadFromDb() }
     catch(e){ alert(e.message || '잡수입/기타수입 반영 실패') }
   }
+  async function matchDepositGroup(depositId, groupCode=null){
+    try{ await api.matchDepositGroup(depositId,{group_code:groupCode || undefined}); await reloadFromDb() }
+    catch(e){ alert(e.message || '묶음수납 반영 실패') }
+  }
   async function excludeDeposit(depositId){
     try{ await api.excludeDeposit(depositId); await reloadFromDb() }
     catch(e){ alert(e.message || '입금 제외 실패') }
@@ -159,7 +163,7 @@ export default function App() {
     catch(e){ alert(e.message || '전체자명단 전환 실패') }
   }
 
-  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, matchDeposit, matchDepositIncome, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
+  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, matchDeposit, matchDepositIncome, matchDepositGroup, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
   const Screen = {dashboard:Dashboard,list:ReceivablesList,bank:BankMatching,closure:ClosureBoard,payments:PaymentsHistory,pending:PendingBoard,import:ExcelImport}[view] || Dashboard
 
   return <div className="app top-app">
