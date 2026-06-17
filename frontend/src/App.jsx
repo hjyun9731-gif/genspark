@@ -9,6 +9,16 @@ import ClosureBoard from './screens/ClosureBoard.jsx'
 import PaymentsHistory from './screens/PaymentsHistory.jsx'
 import PendingBoard from './screens/PendingBoard.jsx'
 import ExcelImport from './screens/ExcelImport.jsx'
+import MobileApp from './mobile/MobileApp.jsx'
+
+function detectMobile(){
+  const override = localStorage.getItem('misu_view_mode') // 'mobile' | 'pc'
+  if(override==='mobile') return true
+  if(override==='pc') return false
+  const ua = /iphone|ipod|android.*mobile|windows phone/i.test(navigator.userAgent||'')
+  const narrow = typeof window!=='undefined' && window.matchMedia('(max-width: 768px)').matches
+  return ua || narrow
+}
 
 const NAV = [
   { key: 'dashboard', label: '대시보드' },
@@ -25,6 +35,13 @@ export default function App() {
   const [health, setHealth] = useState('확인 중…')
   const [preset, setPreset] = useState(null)
   const [data, setData] = useState(() => buildInitialData())
+  const [isMobile, setIsMobile] = useState(() => detectMobile())
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(detectMobile())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   async function reloadFromDb(){
     try{
@@ -93,8 +110,8 @@ export default function App() {
     catch(e){ alert(e.message || '회원정보 수정 실패') }
   }
 
-  async function applyPayment(memberId, amount, method='직접수납', chargeItem=null){
-    try{ await api.applyPayment(memberId,{amount:Number(amount)||0, method, charge_item:chargeItem || undefined}); await reloadFromDb() }
+  async function applyPayment(memberId, amount, method='직접수납'){
+    try{ await api.applyPayment(memberId,{amount:Number(amount)||0, method}); await reloadFromDb() }
     catch(e){ alert(e.message || '수납 반영 실패') }
   }
 
@@ -125,17 +142,9 @@ export default function App() {
     catch(e){ alert(e.message || '수납 수정 실패') }
   }
 
-  async function matchDeposit(depositId, memberId, chargeItem=null){
-    try{ await api.matchDeposit(depositId,{member_id:memberId, charge_item:chargeItem || undefined}); await reloadFromDb() }
+  async function matchDeposit(depositId, memberId){
+    try{ await api.matchDeposit(depositId,{member_id:memberId}); await reloadFromDb() }
     catch(e){ alert(e.message || '통장매칭 실패') }
-  }
-  async function matchDepositIncome(depositId, chargeItem='기타'){
-    try{ await api.matchDepositIncome(depositId,{charge_item:chargeItem}); await reloadFromDb() }
-    catch(e){ alert(e.message || '잡수입/기타수입 반영 실패') }
-  }
-  async function matchDepositGroup(depositId, groupCode=null){
-    try{ await api.matchDepositGroup(depositId,{group_code:groupCode || undefined}); await reloadFromDb() }
-    catch(e){ alert(e.message || '묶음수납 반영 실패') }
   }
   async function excludeDeposit(depositId){
     try{ await api.excludeDeposit(depositId); await reloadFromDb() }
@@ -163,8 +172,18 @@ export default function App() {
     catch(e){ alert(e.message || '전체자명단 전환 실패') }
   }
 
-  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, matchDeposit, matchDepositIncome, matchDepositGroup, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
+  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, matchDeposit, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
   const Screen = {dashboard:Dashboard,list:ReceivablesList,bank:BankMatching,closure:ClosureBoard,payments:PaymentsHistory,pending:PendingBoard,import:ExcelImport}[view] || Dashboard
+
+  if (isMobile) {
+    return <MobileApp
+      data={data}
+      summary={summary}
+      applyPayment={applyPayment}
+      reloadFromDb={reloadFromDb}
+      onExitMobile={() => { localStorage.setItem('misu_view_mode','pc'); setIsMobile(false) }}
+    />
+  }
 
   return <div className="app top-app">
     <header className="top-nav">
@@ -173,6 +192,7 @@ export default function App() {
         <span>강원 개인소형화물협회</span>
       </div>
       <nav className="top-menu">{NAV.map(n=><button key={n.key} onClick={()=>navigate(n.key)} className={'top-nav-btn '+(view===n.key?'active':'')}>{n.label}</button>)}</nav>
+      <button className="top-nav-btn" onClick={()=>{localStorage.setItem('misu_view_mode','mobile');setIsMobile(true)}}>모바일</button>
       <div className="top-health"><i/> DB 연결됨</div>
     </header>
     <main className="main top-main"><Screen {...screenProps}/></main>
