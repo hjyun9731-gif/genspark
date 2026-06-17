@@ -111,11 +111,6 @@ function memberPayments(data, member){
 function paymentSearchText(payment){
   return [payment.name, payment.vehicleNo, payment.vehicle_no, payment.mgmtNo, payment.mgmt_no, payment.method, payment.paidForYm, payment.paid_for_ym, payment.chargeItem, payment.charge_item, payment.memo].join(' ').toLowerCase()
 }
-function recentPaymentText(payments){
-  if (!payments.length) return '-'
-  const p = payments[0]
-  return `${p.paidDate || (p.createdAt || '').slice(0,10) || '-'} · ${formatWon(p.amount)} · ${p.method || '-'}`
-}
 function makeMemoFromFields(fields){
   const parts = []
   if(fields.address) parts.push(`주소:${fields.address}`)
@@ -337,7 +332,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
         <table className="admin-table roster-like-table receivables-table">
           <thead>
             <tr>
-              <th>지역</th><th>차량번호</th><th>이름</th><th>계정</th><th>부과기준일</th><th>기준월</th><th>미수개월수</th><th className="right">현재잔액</th><th>핸드폰번호</th><th>주소</th><th>처리상태</th><th>최근수납</th><th className="right sticky-action-col">수정/처리</th>
+              <th>지역</th><th>차량번호</th><th>이름</th><th>계정</th><th>부과기준일</th><th>기준월</th><th>미수개월수</th><th className="right">현재잔액</th><th>핸드폰번호</th><th>주소</th><th>처리상태</th><th className="right sticky-action-col">수정/처리</th>
             </tr>
           </thead>
           <tbody>
@@ -353,7 +348,6 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
               <td className="mono nowrap" style={{ color: member.disconnected ? 'var(--rose)' : undefined }}>{member.phone || '-'}</td>
               <td className="clip-cell" title={addressOf(member)}>{addressOf(member)}</td>
               <td>{Number(member.totalArrears) < 0 ? <Badge tone="purple">선납</Badge> : Number(member.totalArrears) === 0 ? <Badge tone="mint">완납/0원</Badge> : <Badge tone={member.status === '정상' ? 'soft' : 'rose'}>{member.status || '-'}</Badge>}</td>
-              <td className="mono nowrap">{paymentsFor(member).length ? <button type="button" className="name-link payment-mini-link has-payment" onClick={() => setPaymentMember(member)}>{recentPaymentText(paymentsFor(member))}</button> : <span className="muted">-</span>}</td>
               <td className="right action-cell sticky-action-cell">
                 <button type="button" className="btn mini action-edit" onClick={() => setEditMember(member)}>수정</button>
                 <button type="button" className="btn mini action-pay" onClick={() => setQuickPay(member)}>수납</button>

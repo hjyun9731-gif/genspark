@@ -11,6 +11,32 @@ import PendingBoard from './screens/PendingBoard.jsx'
 import ExcelImport from './screens/ExcelImport.jsx'
 
 
+const VIEW_HASH = {
+  dashboard: '#dashboard',
+  list: '#receivables',
+  bank: '#bank',
+  closure: '#closure',
+  payments: '#payments',
+  pending: '#pending',
+  import: '#import',
+}
+
+const HASH_VIEW = {
+  '#dashboard': 'dashboard',
+  '#receivables': 'list',
+  '#list': 'list',
+  '#bank': 'bank',
+  '#closure': 'closure',
+  '#payments': 'payments',
+  '#pending': 'pending',
+  '#import': 'import',
+}
+
+function getInitialView(){
+  const hash = (window.location.hash || '').toLowerCase()
+  return HASH_VIEW[hash] || 'dashboard'
+}
+
 const NAV = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'list', label: '미수금명단' },
@@ -22,7 +48,7 @@ const NAV = [
 ]
 
 export default function App() {
-  const [view, setView] = useState('list')
+  const [view, setView] = useState(() => getInitialView())
   const [health, setHealth] = useState('확인 중…')
   const [preset, setPreset] = useState(null)
   const [data, setData] = useState(() => buildInitialData())
@@ -83,7 +109,23 @@ export default function App() {
     return data.dashboardSummary ? {...local, ...data.dashboardSummary} : local
   }, [data])
 
-  function navigate(nextView, nextPreset=null){ setView(nextView); setPreset(nextPreset) }
+  function navigate(nextView, nextPreset=null){
+    setView(nextView)
+    setPreset(nextPreset)
+    const nextHash = VIEW_HASH[nextView] || '#dashboard'
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash)
+    }
+  }
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = HASH_VIEW[(window.location.hash || '').toLowerCase()] || 'dashboard'
+      setView(next)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   async function saveMemo(memberId, memo){
     try{ await api.updateMember(memberId,{memo}); await reloadFromDb() }
