@@ -1,20 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
-import '../styles.css'
 import './mobile.css'
 
 function won(n){ return (Number(n)||0).toLocaleString('ko-KR') + '원' }
 function num(n){ return (Number(n)||0).toLocaleString('ko-KR') }
 function text(v){ return String(v ?? '').trim() }
 function norm(v){ return text(v).replace(/[^0-9a-zA-Z가-힣]/g,'').toLowerCase() }
-function getBalance(m){
-  const direct = [m.currentBalance, m.current_balance, m.totalArrears, m.arrears_amount, m.balance]
-    .map(v => Number(v)).find(v => Number.isFinite(v))
-  if (Number.isFinite(direct)) return direct
-  const arr = Array.isArray(m.arrears) ? m.arrears : []
-  return arr.filter(a => !a.paid && !a.is_paid).reduce((s,a)=>s+(Number(a.amount)||0),0)
+function getMonthly(m){
+  return Number(m.monthlyCharge ?? m.monthly_charge) || (m.chargeItem === '협회비' || m.charge_item === '협회비' ? 10000 : 5000)
 }
-function getMonthly(m){ return Number(m.monthlyCharge ?? m.monthly_charge) || (m.chargeItem === '협회비' || m.charge_item === '협회비' ? 10000 : 5000) }
+function isSafeBalance(m, amount){
+  const n = Number(amount)
+  if (!Number.isFinite(n)) return false
+  if (n <= 0) return n === 0
+  const monthly = getMonthly(m) || 5000
+  const impliedMonths = monthly > 0 ? Math.ceil(n / monthly) : 0
+  // 모바일에서 200~400개월처럼 부과기준일로 과대계산된 값은 표시하지 않는다.
+  // 실제 운영 기준은 현재 엑셀/미수원장 잔액이므로 120개월 초과 자동계산값은 잘못된 값으로 본다.
+  return impliedMonths <= 120
+}
+function safeNumber(v){
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+function getBalance(m){
+  // current_balance/currentBalance가 있으면 우선 사용하되, 과대 자동계산값은 버린다.
+  const directKeys = ['currentBalance','current_balance','arrears_amount','balance','totalArrears','total_arrears']
+  for (const k of directKeys){
+    const n = safeNumber(m[k])
+    if (n !== null && isSafeBalance(m, n)) return n
+  }
+  const arr = Array.isArray(m.arrears) ? m.arrears : []
+  const open = arr.filter(a => !a.paid && !a.is_paid)
+  const sum = open.reduce((s,a)=>s+(Number(a.amount)||0),0)
+  if (open.length && isSafeBalance(m, sum)) return sum
+  return 0
+}
 function getMonths(m){
   const balance = getBalance(m)
   if (balance <= 0) return 0
@@ -22,7 +43,7 @@ function getMonths(m){
   const monthly = getMonthly(m)
   const byAmount = monthly > 0 ? Math.ceil(balance / monthly) : 0
   if (Number.isFinite(apiMonths) && apiMonths > 0 && apiMonths <= 120) return apiMonths
-  return byAmount
+  return byAmount <= 120 ? byAmount : 0
 }
 function sigun(m){ return text(m.sigun || m.region || m.regionRaw || m.region_raw || '-') }
 function vehicle(m){ return text(m.vehicleNo || m.vehicle_no || '-') }
