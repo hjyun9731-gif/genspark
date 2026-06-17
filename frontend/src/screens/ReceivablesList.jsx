@@ -4,15 +4,14 @@ import { SIGUN, getOpenArrears } from '../data.js'
 
 const PER_PAGE = 50
 
-const INCOME_ITEMS = [
-  { value: '협회비', label: '협회비', accounting: '회비수입', tone: 'lavender' },
-  { value: '관리비', label: '관리비', accounting: '회비수입', tone: 'sky' },
-  { value: '협회가입비', label: '협회가입비', accounting: '가수금', tone: 'pink' },
-  { value: '자격증명발급비', label: '자격증명발급비', accounting: '잡수입', tone: 'yellow' },
-  { value: '기타', label: '기타', accounting: '기타수입', tone: 'green' },
-]
-function incomeMeta(item){ return INCOME_ITEMS.find(x => x.value === item) || { value:item || '-', label:item || '-', accounting:'회비수입', tone:'soft' } }
-
+function useDebouncedValue(value, delay = 300){
+  const [debounced, setDebounced] = React.useState(value)
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay)
+    return () => window.clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
 
 function memoParts(member){
   return String(member.memo || '').split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean)
@@ -143,6 +142,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const [editMember, setEditMember] = useState(null)
   const [paymentMember, setPaymentMember] = useState(null)
   const [highlightMemberId, setHighlightMemberId] = useState(preset?.memberId || null)
+  const debouncedQ = useDebouncedValue(q, 300)
 
   React.useEffect(() => {
     if (!preset) return
@@ -170,9 +170,18 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     return counts
   }, [data.members])
 
+  const paymentsByMember = useMemo(() => {
+    const map = new Map()
+    for (const member of data.members || []) {
+      map.set(String(member.id), memberPayments(data, member))
+    }
+    return map
+  }, [data.members, data.payments])
+
   const rows = useMemo(() => {
     let arr = [...data.members]
-    const hasSearch = q.trim().length > 0
+    const keywordRaw = debouncedQ.trim()
+    const hasSearch = keywordRaw.length > 0
     if (status !== '전체') arr = arr.filter(member => member.status === status)
     // 미수금명단은 이름과 달리 '미수자만'이 아니라 협회 관리 대상 전체 명단이다.
     // 0원 완납자, 선입금/초과입금(-금액) 회원도 빠지면 안 된다.
@@ -186,14 +195,14 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     if (special === '장기') arr = arr.filter(member => arrearsMonthCount(member) >= 12)
     if (special === '결번') arr = arr.filter(member => member.disconnected)
     if (special === '자격') arr = arr.filter(member => member.certMissing)
-    if (q.trim()) {
-      const keyword = q.trim().toLowerCase()
+    if (keywordRaw) {
+      const keyword = keywordRaw.toLowerCase()
       arr = arr.filter(member => {
         const memberHit = [
           member.name, member.vehicleNo, member.mgmtNo, member.phone, member.sigun, member.regionRaw,
           member.memo, addressOf(member), bizNoOf(member), officialAddressOf(member), member.chargeItem,
         ].join(' ').toLowerCase().includes(keyword)
-        const paymentHit = memberPayments(data, member).some(payment => paymentSearchText(payment).includes(keyword))
+        const paymentHit = (paymentsByMember.get(String(member.id)) || []).some(payment => paymentSearchText(payment).includes(keyword))
         return memberHit || paymentHit
       })
     }
@@ -224,7 +233,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [data.members, data.payments, q, sigun, membership, account, amount, status, special, sortKey, sortDir, highlightMemberId])
+  }, [data.members, debouncedQ, sigun, membership, account, amount, status, special, sortKey, sortDir, highlightMemberId, paymentsByMember])
 
   const totalArrears = rows.reduce((sum, member) => sum + (Number(member.totalArrears) || 0), 0)
   const over300k = rows.filter(member => Number(member.totalArrears) >= 300000).length
@@ -232,7 +241,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const pageCount = Math.max(1, Math.ceil(rows.length / PER_PAGE))
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  function paymentsFor(member){ return memberPayments(data, member) }
+  function paymentsFor(member){ return paymentsByMember.get(String(member.id)) || [] }
 
   function resetFilters(){
     setQ('')
@@ -363,7 +372,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     </Card>
 
     {selected && <MemberDetailModal member={data.members.find(member => member.id === selected.id) || selected} payments={paymentsFor(data.members.find(member => member.id === selected.id) || selected)} onClose={() => setSelected(null)} saveMemo={saveMemo} applyPayment={applyPayment} registerClosure={registerClosure} />}
-    {quickPay && <PaymentModal member={quickPay} onClose={() => setQuickPay(null)} onSave={(amountValue, method, chargeItem) => { applyPayment(quickPay.id, amountValue, method, chargeItem); setQuickPay(null) }} />}
+    {quickPay && <PaymentModal member={quickPay} onClose={() => setQuickPay(null)} onSave={(amountValue, method) => { applyPayment(quickPay.id, amountValue, method); setQuickPay(null) }} />}
     {quickClose && <ClosureModal member={quickClose} onClose={() => setQuickClose(null)} onSave={(payload) => { registerClosure(quickClose.id, payload); setQuickClose(null) }} />}
     {editMember && <MemberEditModal member={editMember} onClose={() => setEditMember(null)} onSave={(payload) => { updateMember(editMember.id, payload); setEditMember(null) }} />}
     {paymentMember && <MemberPaymentHistoryModal member={paymentMember} payments={paymentsFor(paymentMember)} onClose={() => setPaymentMember(null)} />}
@@ -383,13 +392,13 @@ function MemberDetailModal({ member, payments=[], onClose, saveMemo, applyPaymen
     <div className="detail-section"><h4 className="compact-title">현재 미수 상세</h4><div className="mini-box"><table className="admin-table dense"><thead><tr><th>기준월</th><th>항목</th><th className="right">금액</th><th>상태</th></tr></thead><tbody>{open.map(item => <tr key={item.ym}><td>{item.ym}</td><td>{item.item}</td><td className="right money">{formatWon(item.amount)}</td><td><Badge tone="rose">미납</Badge></td></tr>)}{!open.length && <tr><td colSpan="4" className="empty-cell compact">현재 미수금이 없습니다.</td></tr>}</tbody></table></div></div>
     <PaymentHistorySection payments={payments} />
     <div className="detail-section"><h4 className="compact-title">내부 메모</h4><textarea className="textarea" value={memo} onChange={e => setMemo(e.target.value)} placeholder="상담 메모 / 특이사항"/><div className="action-row"><button type="button" className="btn primary" onClick={() => saveMemo(member.id, memo)}>메모 저장</button><button type="button" className="btn action-pay" onClick={() => setShowPay(true)}>수납 반영</button><button type="button" className="btn action-close" onClick={() => setShowClose(true)}>폐업/이탈</button></div></div>
-    {showPay && <PaymentModal member={member} onClose={() => setShowPay(false)} onSave={(amountValue, method, chargeItem) => { applyPayment(member.id, amountValue, method, chargeItem); setShowPay(false) }} />}
+    {showPay && <PaymentModal member={member} onClose={() => setShowPay(false)} onSave={(amountValue, method) => { applyPayment(member.id, amountValue, method); setShowPay(false) }} />}
     {showClose && <ClosureModal member={member} onClose={() => setShowClose(false)} onSave={(payload) => { registerClosure(member.id, payload); setShowClose(false); onClose() }} />}
   </div></div>
 }
 function PaymentHistorySection({ payments }){
   const total = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
-  return <div className="detail-section payment-history-section"><h4 className="compact-title">수납내역 <span>{payments.length ? `${payments.length}건 · ${formatWon(total)}` : '0건'}</span></h4><div className="mini-box"><table className="admin-table dense"><thead><tr><th>수납일</th><th>대상월</th><th>항목</th><th>회계구분</th><th>방식</th><th className="right">금액</th><th>메모</th></tr></thead><tbody>{payments.map(payment => { const meta = incomeMeta(payment.chargeItem || payment.charge_item); return <tr key={payment.id}><td>{payment.paidDate || '-'}</td><td>{payment.paidForYm || '-'}</td><td><Badge tone={meta.tone}>{payment.chargeItem || '-'}</Badge></td><td>{payment.accountingType || payment.accounting_type || meta.accounting}</td><td><Badge tone={payment.method === '통장매칭' ? 'blue' : 'soft'}>{payment.method || '-'}</Badge></td><td className="right money">{formatWon(payment.amount)}</td><td className="clip-cell" title={payment.memo || ''}>{payment.memo || '-'}</td></tr>})}{!payments.length && <tr><td colSpan="7" className="empty-cell compact">수납내역이 없습니다.</td></tr>}</tbody></table></div></div>
+  return <div className="detail-section payment-history-section"><h4 className="compact-title">수납내역 <span>{payments.length ? `${payments.length}건 · ${formatWon(total)}` : '0건'}</span></h4><div className="mini-box"><table className="admin-table dense"><thead><tr><th>수납일</th><th>대상월</th><th>항목</th><th>방식</th><th className="right">금액</th><th>메모</th></tr></thead><tbody>{payments.map(payment => <tr key={payment.id}><td>{payment.paidDate || '-'}</td><td>{payment.paidForYm || '-'}</td><td>{payment.chargeItem || '-'}</td><td><Badge tone={payment.method === '통장매칭' ? 'blue' : 'soft'}>{payment.method || '-'}</Badge></td><td className="right money">{formatWon(payment.amount)}</td><td className="clip-cell" title={payment.memo || ''}>{payment.memo || '-'}</td></tr>)}{!payments.length && <tr><td colSpan="6" className="empty-cell compact">수납내역이 없습니다.</td></tr>}</tbody></table></div></div>
 }
 
 function MemberPaymentHistoryModal({ member, payments, onClose }){
@@ -398,36 +407,8 @@ function MemberPaymentHistoryModal({ member, payments, onClose }){
 }
 
 function Info({ k, v }){ return <div className="info"><b>{k}</b><span>{v || '-'}</span></div> }
-function PaymentModal({ member, onClose, onSave }){
-  const [amount, setAmount] = useState(Math.max(Number(member.totalArrears) || Number(member.monthlyCharge) || 0, 0))
-  const [method, setMethod] = useState('직접수납')
-  const [chargeItem, setChargeItem] = useState(member.chargeItem || '관리비')
-  const meta = incomeMeta(chargeItem)
-  const nonArrears = ['협회가입비','자격증명발급비','기타'].includes(chargeItem)
-  return <div className="modal-bg"><div className="modal"><h3>수납 반영</h3>
-    <div className="form-row"><b>회원</b><span>{member.name} / {member.vehicleNo}</span></div>
-    <div className="form-row"><b>현재 미수</b><span>{formatWon(member.totalArrears)}</span></div>
-    <div className="form-row"><b>수납항목</b><select className="select" value={chargeItem} onChange={e => setChargeItem(e.target.value)}>{INCOME_ITEMS.map(item => <option key={item.value} value={item.value}>{item.label} · {item.accounting}</option>)}</select></div>
-    <div className="form-row"><b>회계구분</b><span><Badge tone={meta.tone}>{meta.accounting}</Badge> {nonArrears && <em className="small">미수금 차감 없음</em>}</span></div>
-    <div className="form-row"><b>수납액</b><input className="input" type="number" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-    <div className="form-row"><b>방법</b><select className="select" value={method} onChange={e => setMethod(e.target.value)}><option>직접수납</option><option>통장매칭</option><option>현금</option><option>CMS</option></select></div>
-    <div className="notice compact-notice">협회가입비(가수금)와 자격증명발급비(잡수입)는 수납내역에만 남고 현재잔액은 차감하지 않습니다.</div>
-    <div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-pay" onClick={() => onSave(amount, method, chargeItem)}>반영</button></div>
-  </div></div>
-}
-function ClosureModal({ member, onClose, onSave }){
-  const [type, setType] = useState('폐업')
-  const [docNo, setDocNo] = useState('')
-  const [content, setContent] = useState('시청 접수 후 처리')
-  const unpaidBalance = Number(member.totalArrears ?? member.arrearsAmount ?? 0) || 0
-  return <div className="modal-bg"><div className="modal"><h3>폐업/이탈 등록</h3>
-    <div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e => setType(e.target.value)}><option>폐업</option><option>탈퇴</option><option>양도</option><option>이관</option></select></div>
-    <div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호" /></div>
-    <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e => setContent(e.target.value)} /></div>
-    <div className="notice"><b>폐업현황 저장 미수잔액: {formatWon(unpaidBalance)}</b></div>
-    <div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-close" onClick={() => onSave({ type, docNo, content, unpaid_balance: unpaidBalance })}>처리 저장</button></div>
-  </div></div>
-}
+function PaymentModal({ member, onClose, onSave }){ const [amount, setAmount] = useState(Math.max(Number(member.totalArrears) || 0, 0)); const [method, setMethod] = useState('직접수납'); return <div className="modal-bg"><div className="modal"><h3>수납 반영</h3><div className="form-row"><b>회원</b><span>{member.name} / {member.vehicleNo}</span></div><div className="form-row"><b>현재 미수</b><span>{formatWon(member.totalArrears)}</span></div><div className="form-row"><b>수납액</b><input className="input" type="number" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="form-row"><b>방법</b><select className="select" value={method} onChange={e => setMethod(e.target.value)}><option>직접수납</option><option>통장매칭</option><option>현금</option><option>CMS</option></select></div><div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-pay" onClick={() => onSave(amount, method)}>반영</button></div></div></div> }
+function ClosureModal({ member, onClose, onSave }){ const [type, setType] = useState('폐업'); const [docNo, setDocNo] = useState(''); const [content, setContent] = useState('시청 접수 후 처리'); return <div className="modal-bg"><div className="modal"><h3>폐업/이탈 등록</h3><div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e => setType(e.target.value)}><option>폐업</option><option>탈퇴</option><option>양도</option><option>이관</option></select></div><div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호" /></div><div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e => setContent(e.target.value)} /></div><div className="notice">현재 미수잔액 {formatWon(member.totalArrears)} 기준으로 폐업현황에 저장됩니다.</div><div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-close" onClick={() => onSave({ type, docNo, content })}>처리 저장</button></div></div></div> }
 
 function MemberEditModal({ member, onClose, onSave }){
   const [form, setForm] = useState({
