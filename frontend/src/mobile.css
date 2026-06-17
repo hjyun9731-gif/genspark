@@ -167,3 +167,10 @@
 
 .m-pcswitch{text-align:center;padding:16px;color:var(--m-sub);font-size:12px}
 .m-pcswitch button{background:transparent;border:0;color:var(--m-primary-ink);font-weight:700;text-decoration:underline;font-size:12px}
+
+.m-sync-line{
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: rgba(255,255,255,.78);
+  letter-spacing: -0.02em;
+}

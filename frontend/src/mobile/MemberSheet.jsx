@@ -7,9 +7,17 @@ function extractInfo(member, key) {
   const found = String(member.memo || '').split(/\s*\/\s*/).map(v => v.trim()).find(v => v.startsWith(key + ':'))
   return found ? found.slice(key.length + 1).trim() : ''
 }
+function num(value) {
+  if (typeof value === 'number') return value
+  const n = Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(n) ? n : 0
+}
+function moneyOf(member) {
+  return num(member.totalArrears ?? member.total_arrears ?? member.arrears ?? member.arrearsAmount ?? member.unpaidAmount ?? member.receivableAmount ?? member.currentBalance ?? member.balance)
+}
 function monthCount(member) {
-  const amount = Number(member.totalArrears) || 0
-  const monthly = Number(member.monthlyCharge) || 0
+  const amount = moneyOf(member)
+  const monthly = num(member.monthlyCharge ?? member.monthly_charge)
   if (amount <= 0) return 0
   if (monthly > 0) return Math.max(1, Math.ceil(amount / monthly))
   return Number(member.arrearsMonths) || 1
@@ -17,7 +25,7 @@ function monthCount(member) {
 
 export default function MemberSheet({ member, onClose, applyPayment, onToast }) {
   const open = useMemo(() => getOpenArrears(member), [member])
-  const total = Number(member.totalArrears) || 0
+  const total = moneyOf(member)
   const months = monthCount(member)
 
   const [method, setMethod] = useState('직접수납')
@@ -32,7 +40,7 @@ export default function MemberSheet({ member, onClose, applyPayment, onToast }) 
     if (amtNum > total && total > 0 && !confirm(`미납액(${formatWon(total)})보다 큰 금액입니다. 그대로 수납할까요?`)) return
     setBusy(true)
     try {
-      await applyPayment(member.id, amtNum, method)
+      await applyPayment(member.id ?? member.memberId ?? member.member_id, amtNum, method)
       onToast(`${member.name} · ${formatWon(amtNum)} 수납 완료`)
       onClose()
     } catch (e) { onToast(e.message || '수납 처리 실패') }
@@ -43,8 +51,8 @@ export default function MemberSheet({ member, onClose, applyPayment, onToast }) 
     <div className="m-sheet" onMouseDown={e => e.stopPropagation()}>
       <div className="m-grip" />
       <div className="m-sheet-head">
-        <div className="m-sheet-name">{member.name}<span className="veh">{member.vehicleNo}</span></div>
-        <div className="m-sheet-meta">{member.sigun || '-'} · {member.chargeItem} · {member.membership === '협회가입' ? '협회가입' : '미가입'} · {member.mgmtNo || '-'}</div>
+        <div className="m-sheet-name">{member.name}<span className="veh">{member.vehicleNo || member.vehicle_no}</span></div>
+        <div className="m-sheet-meta">{member.sigun || member.region || '-'} · {member.chargeItem} · {member.membership === '협회가입' ? '협회가입' : '미가입'} · {member.mgmtNo || '-'}</div>
       </div>
 
       <div className="m-sheet-body">

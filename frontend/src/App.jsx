@@ -11,6 +11,35 @@ import PendingBoard from './screens/PendingBoard.jsx'
 import ExcelImport from './screens/ExcelImport.jsx'
 import MobileApp from './mobile/MobileApp.jsx'
 
+const MOBILE_CACHE_KEY = 'misu_mobile_cache_v2'
+
+function readMobileCache() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(MOBILE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || !Array.isArray(parsed.members) || parsed.members.length === 0) return null
+    return parsed
+  } catch (e) {
+    return null
+  }
+}
+
+function writeMobileCache(payload) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(MOBILE_CACHE_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      members: Array.isArray(payload.members) ? payload.members : [],
+      dashboardSummary: payload.dashboardSummary || null,
+      bySigun: Array.isArray(payload.bySigun) ? payload.bySigun : [],
+    }))
+  } catch (e) {
+    // localStorage 용량 초과 등은 화면 동작에 영향 없게 무시
+  }
+}
+
 function detectMobile(){
   const override = localStorage.getItem('misu_view_mode') // 'mobile' | 'pc'
   if(override==='mobile') return true
@@ -34,8 +63,19 @@ export default function App() {
   const [view, setView] = useState('list')
   const [health, setHealth] = useState('확인 중…')
   const [preset, setPreset] = useState(null)
-  const [data, setData] = useState(() => buildInitialData())
+  const [data, setData] = useState(() => {
+    const base = buildInitialData()
+    const cached = readMobileCache()
+    return cached ? {
+      ...base,
+      members: cached.members || [],
+      dashboardSummary: cached.dashboardSummary || null,
+      bySigun: cached.bySigun || [],
+    } : base
+  })
+  const [mobileCacheSavedAt, setMobileCacheSavedAt] = useState(() => readMobileCache()?.savedAt || '')
   const [isMobile, setIsMobile] = useState(() => detectMobile())
+  const [loading, setLoading] = useState(() => !(readMobileCache()?.members?.length))
 
   useEffect(() => {
     const onResize = () => setIsMobile(detectMobile())
@@ -43,8 +83,32 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  async function reloadFromDb(){
+  async function reloadFromDb(options = {}){
+    const mobileOnly = !!options.mobileOnly
+    const silent = !!options.silent
+    if (!silent) setLoading(true)
     try{
+      if (mobileOnly) {
+        const [members, dashboardSummary, bySigun] = await Promise.all([
+          api.listMembers({size: 10000}),
+          api.dashboardSummary().catch(()=>null),
+          api.dashboardBySigun().catch(()=>[]),
+        ])
+        const nextMembers = Array.isArray(members) ? members : []
+        setData(d => ({
+          ...d,
+          members: nextMembers,
+          dashboardSummary: dashboardSummary || d.dashboardSummary || null,
+          bySigun: Array.isArray(bySigun) ? bySigun : d.bySigun || [],
+        }))
+        if (nextMembers.length) {
+          writeMobileCache({members: nextMembers, dashboardSummary, bySigun})
+          setMobileCacheSavedAt(new Date().toISOString())
+        }
+        setHealth(nextMembers.length ? '연결됨 · 실제 DB 데이터 표시 중' : '연결됨 · DB 데이터 없음, 엑셀 업로드 필요')
+        return true
+      }
+
       const [members, closures, pending, deposits, payments, dashboardSummary, bySigun] = await Promise.all([
         api.listMembers({size: 10000}),
         api.listClosures().catch(()=>[]),
@@ -54,28 +118,46 @@ export default function App() {
         api.dashboardSummary().catch(()=>null),
         api.dashboardBySigun().catch(()=>[]),
       ])
+      const nextMembers = Array.isArray(members) ? members : []
+      const nextDashboardSummary = dashboardSummary || null
+      const nextBySigun = Array.isArray(bySigun) ? bySigun : []
       setData(d => ({
         ...d,
-        members: Array.isArray(members)?members:[],
+        members: nextMembers,
         closures: closures||[],
         pending: pending||[],
         deposits: deposits||[],
         payments: payments||[],
-        dashboardSummary: dashboardSummary||null,
-        bySigun: Array.isArray(bySigun)?bySigun:[],
+        dashboardSummary: nextDashboardSummary,
+        bySigun: nextBySigun,
       }))
-      setHealth(Array.isArray(members) && members.length ? '연결됨 · 실제 DB 데이터 표시 중' : '연결됨 · DB 데이터 없음, 엑셀 업로드 필요')
+      if (nextMembers.length) {
+        writeMobileCache({members: nextMembers, dashboardSummary: nextDashboardSummary, bySigun: nextBySigun})
+        setMobileCacheSavedAt(new Date().toISOString())
+      }
+      setHealth(nextMembers.length ? '연결됨 · 실제 DB 데이터 표시 중' : '연결됨 · DB 데이터 없음, 엑셀 업로드 필요')
       return true
     }catch(e){
-      setData(d => ({...d, members: [], closures: [], pending: [], deposits: [], payments: []}))
-      setHealth('백엔드 미연결 · 데이터 표시 불가')
+      if (!data.members.length) setData(d => ({...d, members: [], closures: [], pending: [], deposits: [], payments: []}))
+      setHealth(data.members.length ? '백엔드 미연결 · 저장된 자료 표시 중' : '백엔드 미연결 · 데이터 표시 불가')
       return false
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    api.health().then((d) => { setHealth(`연결됨 (${d.app})`); reloadFromDb() }).catch(() => setHealth('백엔드 미연결 · 데이터 표시 불가'))
-  }, [])
+    const cached = readMobileCache()
+    api.health()
+      .then((d) => {
+        setHealth(`연결됨 (${d.app})`)
+        reloadFromDb({mobileOnly: detectMobile(), silent: !!cached?.members?.length})
+      })
+      .catch(() => {
+        setHealth(cached?.members?.length ? '백엔드 미연결 · 저장된 자료 표시 중' : '백엔드 미연결 · 데이터 표시 불가')
+        setLoading(false)
+      })
+  }, []) // eslint-disable-line
 
   const summary = useMemo(() => {
     const active = data.members.filter(m => m.status === '정상')
@@ -181,6 +263,9 @@ export default function App() {
       summary={summary}
       applyPayment={applyPayment}
       reloadFromDb={reloadFromDb}
+      loading={loading}
+      health={health}
+      mobileCacheSavedAt={mobileCacheSavedAt}
       onExitMobile={() => { localStorage.setItem('misu_view_mode','pc'); setIsMobile(false) }}
     />
   }
