@@ -37,36 +37,8 @@ def _date_iso(d: date | None) -> str | None:
     return fixed.isoformat() if fixed else None
 
 
-NON_ARREARS_INCOME_ITEMS = {"협회가입비", "자격증명발급비", "기타"}
-
-
-def _accounting_type(charge_item: str | None) -> str:
-    if charge_item == "협회가입비":
-        return "가수금"
-    if charge_item == "자격증명발급비":
-        return "잡수입"
-    if charge_item == "기타":
-        return "기타수입"
-    return "회비수입"
-
-
-def _is_non_arrears_income(charge_item: str | None) -> bool:
-    return (charge_item or "") in NON_ARREARS_INCOME_ITEMS
-
-
-def _ym_from_date(d: date | None) -> str:
-    d = d or date.today()
-    return d.strftime("%Y-%m")
-
-
 def _open_items(member: Member) -> list[ReceivableItem]:
     return sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount > 0], key=lambda x: x.ym)
-
-
-def _current_balance(member: Member) -> int:
-    # 화면의 현재잔액과 동일한 기준: 미납/선납 포함, 납부완료 제외.
-    # 폐업 처리 시 금액이 줄어들지 않도록 이 기준을 폐업현황에도 사용한다.
-    return sum(int(x.amount or 0) for x in member.receivable_items if (not x.is_paid) and int(x.amount or 0) != 0)
 
 
 def _member_dict(member: Member, detail: bool = False) -> dict:
@@ -74,7 +46,7 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
     balance_items = sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount != 0], key=lambda x: x.ym)
     paid_items = [x for x in member.receivable_items if x.is_paid]
     # 미수금명단 표시용 현재잔액: 0원/선입금(-금액)도 회원이 사라지면 안 되므로 음수까지 반영한다.
-    arrears_amount = _current_balance(member)
+    arrears_amount = sum(x.amount for x in balance_items)
     out = {
         # DB 원본 필드
         "id": member.id,
@@ -249,30 +221,36 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
     member = db.scalar(stmt)
     if member is None:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-    remain = int(payload.amount or 0)
+    remain = payload.amount
     if remain <= 0:
         raise HTTPException(status_code=400, detail="수납액은 0원보다 커야 합니다.")
 
-    charge_item = payload.charge_item or member.charge_item or "관리비"
-    paid_date = payload.paid_date or date.today()
-
-    # 협회가입비(가수금), 자격증명발급비(잡수입), 기타는 미수금 차감 없이 수납내역만 남긴다.
-    if _is_non_arrears_income(charge_item):
-        paid_for_ym = payload.paid_for_ym or _ym_from_date(paid_date)
-        db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
-        db.add(MemberHistory(member_id=member.id, content=f"{charge_item}({_accounting_type(charge_item)}) 수납 {remain:,}원 / 미수금 차감 없음", actor="system"))
+    # 가수금/잡수입/기타 등 '기록만' 항목: 미수금 차감 없이 수납내역 1건만 남긴다.
+    if payload.deduct is False:
+        item_label = payload.charge_item or "기타"
+        db.add(Payment(
+            member_id=member.id,
+            paid_for_ym=(payload.paid_date or date.today()).strftime("%Y-%m"),
+            charge_item=item_label,
+            amount=remain,
+            method=payload.method,
+            paid_date=payload.paid_date or date.today(),
+            deposit_id=payload.deposit_id,
+        ))
+        db.add(MemberHistory(member_id=member.id, content=f"{item_label} 수납 {remain:,}원 (미수금 미차감)", actor="system"))
         db.commit()
-        return {"ok": True, "paid_count": 0, "applied": remain, "remain": 0, "non_arrears": True, "accounting_type": _accounting_type(charge_item), "member": get_member(member_id, db)}
+        return {"ok": True, "paid_count": 0, "applied": remain, "remain": 0, "member": get_member(member_id, db)}
 
     paid_count = 0
     applied = 0
+    item_override = payload.charge_item
     for item in _open_items(member):
         if remain <= 0:
             break
         pay_amount = min(remain, item.amount)
         if pay_amount <= 0:
             continue
-        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
+        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item_override or item.charge_item, amount=pay_amount, method=payload.method, paid_date=payload.paid_date or date.today(), deposit_id=payload.deposit_id))
         applied += pay_amount
         remain -= pay_amount
         if pay_amount >= item.amount:
@@ -281,16 +259,7 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
         else:
             item.amount -= pay_amount
         member.last_payment_ym = item.ym
-
-    # 미수 없는 회원에게 협회비/관리비를 추가로 받은 경우도 선납/추가입금으로 기록한다.
-    if applied <= 0 and remain > 0:
-        paid_for_ym = payload.paid_for_ym or _ym_from_date(paid_date)
-        db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
-        applied = remain
-        remain = 0
-        db.add(MemberHistory(member_id=member.id, content=f"{charge_item} 선납/추가입금 {applied:,}원", actor="system"))
-    else:
-        db.add(MemberHistory(member_id=member.id, content=f"수납 반영 {applied:,}원 / 미수항목 {paid_count}건 완납", actor="system"))
+    db.add(MemberHistory(member_id=member.id, content=f"수납 반영 {applied:,}원 / 미수항목 {paid_count}건 완납", actor="system"))
     db.commit()
     return {"ok": True, "paid_count": paid_count, "applied": applied, "remain": remain, "member": get_member(member_id, db)}
 
@@ -301,9 +270,7 @@ def register_closure(member_id: str, payload: ClosureCreate, db: Session = Depen
     member = db.scalar(stmt)
     if member is None:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-    server_unpaid = max(0, _current_balance(member))
-    payload_unpaid = max(0, int(payload.unpaid_balance or 0))
-    unpaid = payload_unpaid if payload_unpaid > 0 else server_unpaid
+    unpaid = sum(x.amount for x in _open_items(member))
     closure = Closure(
         member_id=member.id,
         type=payload.type,

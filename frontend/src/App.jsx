@@ -10,6 +10,7 @@ import PaymentsHistory from './screens/PaymentsHistory.jsx'
 import PendingBoard from './screens/PendingBoard.jsx'
 import ExcelImport from './screens/ExcelImport.jsx'
 
+
 const NAV = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'list', label: '미수금명단' },
@@ -19,21 +20,13 @@ const NAV = [
   { key: 'pending', label: '신규 · 예정자' },
   { key: 'import', label: '엑셀 업로드' },
 ]
-const NAV_KEYS = new Set(NAV.map(n => n.key))
-function initialView(){
-  if (typeof window === 'undefined') return 'list'
-  const hash = (window.location.hash || '').replace('#','')
-  if (NAV_KEYS.has(hash)) return hash
-  const saved = window.localStorage.getItem('misugeum:lastView')
-  if (NAV_KEYS.has(saved)) return saved
-  return 'list'
-}
 
 export default function App() {
-  const [view, setView] = useState(initialView)
+  const [view, setView] = useState('list')
   const [health, setHealth] = useState('확인 중…')
   const [preset, setPreset] = useState(null)
   const [data, setData] = useState(() => buildInitialData())
+
 
   async function reloadFromDb(){
     try{
@@ -69,22 +62,6 @@ export default function App() {
     api.health().then((d) => { setHealth(`연결됨 (${d.app})`); reloadFromDb() }).catch(() => setHealth('백엔드 미연결 · 데이터 표시 불가'))
   }, [])
 
-  useEffect(() => {
-    window.localStorage.setItem('misugeum:lastView', view)
-    if ((window.location.hash || '').replace('#','') !== view) {
-      window.history.replaceState(null, '', `#${view}`)
-    }
-  }, [view])
-
-  useEffect(() => {
-    const onHash = () => {
-      const next = (window.location.hash || '').replace('#','')
-      if (NAV_KEYS.has(next)) setView(next)
-    }
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [])
-
   const summary = useMemo(() => {
     const active = data.members.filter(m => m.status === '정상')
     const arrearsMembers = active.filter(m => m.totalArrears > 0)
@@ -118,23 +95,13 @@ export default function App() {
     catch(e){ alert(e.message || '회원정보 수정 실패') }
   }
 
-  async function applyPayment(memberId, amount, method='직접수납', chargeItem=null){
-    try{ await api.applyPayment(memberId,{amount:Number(amount)||0, method, charge_item:chargeItem || undefined}); await reloadFromDb() }
+  async function applyPayment(memberId, amount, method='직접수납'){
+    try{ await api.applyPayment(memberId,{amount:Number(amount)||0, method}); await reloadFromDb() }
     catch(e){ alert(e.message || '수납 반영 실패') }
   }
 
   async function registerClosure(memberId, payload){
-    try{
-      await api.registerClosure(memberId,{
-        type:payload.type,
-        doc_no:payload.docNo || payload.doc_no || '',
-        content:payload.content || '',
-        notify_later:payload.notify_later || false,
-        process_date:payload.processDate || new Date().toISOString().slice(0,10),
-        unpaid_balance:Number(payload.unpaid_balance ?? payload.unpaidBalance ?? 0) || 0,
-      });
-      await reloadFromDb()
-    }
+    try{ await api.registerClosure(memberId,{type:payload.type, doc_no:payload.docNo || payload.doc_no || '', content:payload.content || '', notify_later:payload.notify_later || false, process_date:payload.processDate || new Date().toISOString().slice(0,10)}); await reloadFromDb() }
     catch(e){ alert(e.message || '폐업 등록 실패') }
   }
 
@@ -160,8 +127,8 @@ export default function App() {
     catch(e){ alert(e.message || '수납 수정 실패') }
   }
 
-  async function matchDeposit(depositId, memberId, chargeItem=null){
-    try{ await api.matchDeposit(depositId,{member_id:memberId, charge_item:chargeItem || undefined}); await reloadFromDb() }
+  async function matchDeposit(depositId, memberId){
+    try{ await api.matchDeposit(depositId,{member_id:memberId}); await reloadFromDb() }
     catch(e){ alert(e.message || '통장매칭 실패') }
   }
   async function excludeDeposit(depositId){

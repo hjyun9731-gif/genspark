@@ -94,8 +94,8 @@ class PaymentApply(BaseModel):
     method: str = "통장매칭"
     paid_date: date | None = None
     deposit_id: int | None = None
-    charge_item: str | None = None
-    paid_for_ym: str | None = None
+    charge_item: str | None = None   # 수납 항목(협회비/관리비/가수금/잡수입/기타)
+    deduct: bool = True              # False면 미수금 차감 없이 수납내역만 기록
 
 
 # ---------- 폐업/처리 ----------
@@ -137,7 +137,6 @@ class DepositOut(ORMModel):
 class DepositMatch(BaseModel):
     """POST /deposits/{id}/match — 입금건을 회원에 매칭."""
     member_id: str
-    charge_item: str | None = None
 
 
 # ---------- 예정자 ----------
