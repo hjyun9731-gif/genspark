@@ -206,28 +206,42 @@ function ClosureEditModal({item,onClose,onSave}){
   }
 
   return <div className="modal-bg">
-    <div className="modal" style={{width:'min(560px, calc(100vw - 48px))', padding:0, overflow:'hidden'}}>
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'20px 22px 14px', borderBottom:'1px solid var(--line)'}}>
+    <div className="modal" style={{width:'min(520px, calc(100vw - 48px))', padding:0, overflow:'hidden'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'18px 20px 12px', borderBottom:'1px solid var(--line)'}}>
         <div>
-          <h3 style={{fontSize:20, fontWeight:800, margin:0}}>폐업/이탈 기록 수정</h3>
+          <h3 style={{fontSize:18, fontWeight:800, margin:0}}>폐업 처리</h3>
           <p style={{margin:'5px 0 0', color:'var(--muted)', fontSize:13}}>{item.name} · {item.vehicleNo || '-'} · {item.sigun || '-'}</p>
         </div>
-        <button className="btn" onClick={onClose}>닫기</button>
+        <button className="btn mini" onClick={onClose}>닫기</button>
       </div>
-      <div style={{padding:'18px 22px 20px'}}>
-        <div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e=>setType(e.target.value)}>{CLOSURE_TYPES.map(opt=><option key={opt.value} value={opt.value}>{opt.title}</option>)}</select></div>
+
+      <div style={{padding:'16px 20px 18px'}}>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:8, marginBottom:14}}>
+          {CLOSURE_TYPES.map(opt => <button
+            key={opt.value}
+            type="button"
+            onClick={()=>setType(opt.value)}
+            className={type===opt.value ? 'btn soft' : 'btn'}
+            style={{height:42, padding:'0 10px', fontWeight:800}}
+          >{opt.title}</button>)}
+        </div>
+
         <div className="form-row"><b>처리일자</b><input className="input" type="date" value={processDate} onChange={e=>setProcessDate(e.target.value)}/></div>
         <div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호"/></div>
         <div className="form-row"><b>미납잔액</b><input className="input" type="number" value={unpaid} onChange={e=>setUnpaid(e.target.value)} /></div>
         <div className="form-row"><b>추후 안내</b><select className="select" value={notify?'예':'아니오'} onChange={e=>setNotify(e.target.value==='예')}><option>예</option><option>아니오</option></select></div>
-        <div className="form-row"><b>연락완료</b><label style={{display:'flex', alignItems:'center', gap:8, fontWeight:700}}><input type="checkbox" checked={contacted} onChange={e=>setContacted(e.target.checked)} style={{width:18, height:18}}/> 연락했음</label></div>
-        {contacted && <>
-          <div className="form-row"><b>연락일자</b><input className="input" type="date" value={contactDate} onChange={e=>setContactDate(e.target.value)}/></div>
-          <div className="form-row"><b>연락방법</b><select className="select" value={contactMethod} onChange={e=>setContactMethod(e.target.value)}>{CONTACT_METHODS.map(m=><option key={m}>{m}</option>)}</select></div>
-          <div className="form-row"><b>연락메모</b><input className="input" value={contactMemo} onChange={e=>setContactMemo(e.target.value)} placeholder="예: 전화 안내 완료"/></div>
-        </>}
-        <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e=>setContent(e.target.value)} placeholder="시청 접수 후 처리, 양도 완료, 이관 처리 등" /></div>
-        <div className="action-row right" style={{marginTop:16}}>
+
+        <div style={{borderTop:'1px solid var(--line-soft)', margin:'12px 0', paddingTop:12}}>
+          <div className="form-row"><b>연락 확인</b><label style={{display:'flex', alignItems:'center', gap:8, fontWeight:700}}><input type="checkbox" checked={contacted} onChange={e=>setContacted(e.target.checked)} style={{width:17, height:17}}/> 연락했음</label></div>
+          {contacted && <>
+            <div className="form-row"><b>연락일자</b><input className="input" type="date" value={contactDate} onChange={e=>setContactDate(e.target.value)}/></div>
+            <div className="form-row"><b>연락방법</b><select className="select" value={contactMethod} onChange={e=>setContactMethod(e.target.value)}>{CONTACT_METHODS.map(m=><option key={m}>{m}</option>)}</select></div>
+            <div className="form-row"><b>연락메모</b><input className="input" value={contactMemo} onChange={e=>setContactMemo(e.target.value)} placeholder="예: 전화 안내 완료"/></div>
+          </>}
+        </div>
+
+        <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e=>setContent(e.target.value)} placeholder="시청 접수 후 처리 등" /></div>
+        <div className="action-row right" style={{marginTop:14}}>
           <button className="btn" onClick={onClose}>취소</button>
           <button className="btn primary" onClick={save}>저장</button>
         </div>
