@@ -132,34 +132,50 @@ export default function ClosureBoard({data, updateClosure, restoreClosure, delet
   </div>
 }
 
+function DetailLine({ label, value, strong }) {
+  return <div style={{display:'grid', gridTemplateColumns:'120px 1fr', gap:10, padding:'9px 0', borderBottom:'1px solid var(--line-soft)'}}>
+    <b style={{fontSize:13, color:'var(--muted)', fontWeight:700}}>{label}</b>
+    <span className={strong ? 'money' : ''} style={{fontSize:14, color:'var(--ink-2)', fontWeight:strong ? 800 : 600}}>{value || '-'}</span>
+  </div>
+}
+
 function ClosureDetailModal({item,onClose,onEdit}){
   const parsed = parseContact(item.content)
   return <div className="modal-bg">
-    <div className="modal wide" style={{maxWidth:760}}>
-      <div className="modal-title-row">
+    <div className="modal" style={{width:'min(560px, calc(100vw - 48px))', padding:0, overflow:'hidden'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'20px 22px 14px', borderBottom:'1px solid var(--line)'}}>
         <div>
-          <h3>{item.name} · {item.type}</h3>
-          <p>{item.sigun || '-'} · {item.vehicleNo || '-'} · {item.docNo || '-'}</p>
+          <h3 style={{fontSize:20, fontWeight:800, margin:0}}>폐업/이탈 상세</h3>
+          <p style={{margin:'5px 0 0', color:'var(--muted)', fontSize:13}}>{item.name} · {item.vehicleNo || '-'} · {item.sigun || '-'}</p>
         </div>
         <button className="btn" onClick={onClose}>닫기</button>
       </div>
-      <div className="info-grid three-col">
-        <div className="info"><b>처리일</b><span>{item.processDate}</span></div>
-        <div className="info"><b>미납잔액</b><span className="money">{formatWon(item.unpaidBalance)}</span></div>
-        <div className="info"><b>추후 납부 안내</b><span>{item.notifyLater ? '예' : '아니오'}</span></div>
-        <div className="info"><b>연락확인</b><span>{parsed.contacted ? '연락완료' : '미연락'}</span></div>
-        <div className="info"><b>연락일자</b><span>{parsed.contactDate || '-'}</span></div>
-        <div className="info"><b>연락방법</b><span>{parsed.contactMethod || '-'}</span></div>
+      <div style={{padding:'18px 22px 20px'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:10}}>
+          <Badge tone="red">{item.type || '폐업'}</Badge>
+          {contactBadge(item)}
+        </div>
+        <div style={{borderTop:'1px solid var(--line-soft)'}}>
+          <DetailLine label="처리일자" value={item.processDate} />
+          <DetailLine label="관리번호" value={item.docNo || '-'} />
+          <DetailLine label="미납잔액" value={formatWon(item.unpaidBalance)} strong />
+          <DetailLine label="추후 납부" value={item.notifyLater ? '예' : '아니오'} />
+          <DetailLine label="연락일자" value={parsed.contactDate || '-'} />
+          <DetailLine label="연락방법" value={parsed.contactMethod || '-'} />
+        </div>
+        <label className="block-label" style={{marginTop:14}}>
+          <b>처리 내용</b>
+          <div className="textarea" style={{height:'auto', minHeight:64, background:'var(--panel-soft)', whiteSpace:'pre-wrap'}}>{parsed.cleanContent || item.content || '내용 없음'}</div>
+        </label>
+        {parsed.contactMemo && <label className="block-label" style={{marginTop:10}}>
+          <b>연락 메모</b>
+          <div className="input" style={{height:'auto', minHeight:40, background:'var(--panel-soft)'}}>{parsed.contactMemo}</div>
+        </label>}
+        <div className="action-row right" style={{marginTop:16}}>
+          <button className="btn" onClick={onEdit}>수정</button>
+          <button className="btn primary" onClick={onClose}>확인</button>
+        </div>
       </div>
-      <div className="detail-section">
-        <h4 className="compact-title">처리 내용</h4>
-        <div className="notice" style={{background:'var(--panel-soft)', color:'var(--text)', borderColor:'var(--line)'}}>{parsed.cleanContent || item.content || '내용 없음'}</div>
-      </div>
-      {parsed.contactMemo && <div className="detail-section">
-        <h4 className="compact-title">연락 메모</h4>
-        <div className="notice" style={{background:'var(--primary-tint)', color:'var(--primary-ink)', borderColor:'var(--primary-line)'}}>{parsed.contactMemo}</div>
-      </div>}
-      <div className="action-row right"><button className="btn" onClick={onEdit}>기록 수정</button><button className="btn primary" onClick={onClose}>확인</button></div>
     </div>
   </div>
 }
@@ -176,7 +192,6 @@ function ClosureEditModal({item,onClose,onSave}){
   const [contactDate,setContactDate]=useState(parsed.contactDate || today())
   const [contactMethod,setContactMethod]=useState(parsed.contactMethod || '전화')
   const [contactMemo,setContactMemo]=useState(parsed.contactMemo || '')
-  const selected = CLOSURE_TYPES.find(x=>x.value===type) || CLOSURE_TYPES[0]
 
   const save = () => {
     const finalContent = makeContent({content, contacted, contactDate, contactMethod, contactMemo})
@@ -191,59 +206,31 @@ function ClosureEditModal({item,onClose,onSave}){
   }
 
   return <div className="modal-bg">
-    <div className="modal wide" style={{maxWidth:820}}>
-      <div className="modal-title-row">
+    <div className="modal" style={{width:'min(560px, calc(100vw - 48px))', padding:0, overflow:'hidden'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'20px 22px 14px', borderBottom:'1px solid var(--line)'}}>
         <div>
-          <h3>폐업/이탈 기록 수정</h3>
-          <p>{item.name} · {item.vehicleNo} · {item.sigun || '-'}</p>
+          <h3 style={{fontSize:20, fontWeight:800, margin:0}}>폐업/이탈 기록 수정</h3>
+          <p style={{margin:'5px 0 0', color:'var(--muted)', fontSize:13}}>{item.name} · {item.vehicleNo || '-'} · {item.sigun || '-'}</p>
         </div>
         <button className="btn" onClick={onClose}>닫기</button>
       </div>
-
-      <div className="notice compact-notice" style={{marginBottom:14}}>
-        처리사유, 미납잔액, 추후 안내, 연락 여부를 한 번에 정리합니다. 연락완료 체크 시 연락일자/방법/메모가 같이 저장됩니다.
-      </div>
-
-      <div className="grid grid-4" style={{marginBottom:14}}>
-        {CLOSURE_TYPES.map(opt => <button key={opt.value} type="button" onClick={()=>setType(opt.value)} className={`card ${type===opt.value ? 'closure-type-card active' : 'closure-type-card'}`} style={{textAlign:'left', padding:14, borderColor:type===opt.value?'var(--primary)':'var(--line)', background:type===opt.value?'var(--primary-tint)':'#fff'}}>
-          <b style={{display:'block', color:'var(--ink)', marginBottom:3}}>{opt.title}</b>
-          <span className="small">{opt.desc}</span>
-        </button>)}
-      </div>
-
-      <div className="info-grid three-col" style={{marginBottom:14}}>
-        <label className="info"><b>처리사유</b><span>{selected.title}</span></label>
-        <label className="info"><b>현재 상태</b><span>{item.memberStatus || item.type || '-'}</span></label>
-        <label className="info"><b>기록 대상</b><span>{item.name || '-'} / {item.vehicleNo || '-'}</span></label>
-      </div>
-
-      <div className="edit-grid" style={{gridTemplateColumns:'repeat(3,minmax(0,1fr))'}}>
-        <label><b>처리일자</b><input className="input" type="date" value={processDate} onChange={e=>setProcessDate(e.target.value)}/></label>
-        <label><b>관리번호/접수번호</b><input className="input" value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="예: 폐-119, 양-46"/></label>
-        <label><b>미납잔액</b><input className="input" type="number" value={unpaid} onChange={e=>setUnpaid(e.target.value)} /></label>
-      </div>
-
-      <div className="detail-section">
-        <h4 className="compact-title">연락 확인</h4>
-        <div className="card" style={{padding:14, background:'var(--panel-soft)'}}>
-          <label style={{display:'flex', alignItems:'center', gap:10, fontWeight:700, marginBottom:12}}>
-            <input type="checkbox" checked={contacted} onChange={e=>setContacted(e.target.checked)} style={{width:18, height:18}}/>
-            회원/차주에게 연락 완료
-          </label>
-          <div className="edit-grid" style={{gridTemplateColumns:'repeat(3,minmax(0,1fr))', marginTop:0}}>
-            <label><b>연락일자</b><input className="input" type="date" value={contactDate} onChange={e=>setContactDate(e.target.value)} disabled={!contacted}/></label>
-            <label><b>연락방법</b><select className="select" value={contactMethod} onChange={e=>setContactMethod(e.target.value)} disabled={!contacted}>{CONTACT_METHODS.map(m=><option key={m}>{m}</option>)}</select></label>
-            <label><b>추후 납부 안내</b><select className="select" value={notify?'예':'아니오'} onChange={e=>setNotify(e.target.value==='예')}><option>예</option><option>아니오</option></select></label>
-          </div>
-          <label className="block-label"><b>연락 메모</b><input className="input" value={contactMemo} onChange={e=>setContactMemo(e.target.value)} disabled={!contacted} placeholder="예: 전화 안내 완료, 미납잔액 추후 납부 안내"/></label>
+      <div style={{padding:'18px 22px 20px'}}>
+        <div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e=>setType(e.target.value)}>{CLOSURE_TYPES.map(opt=><option key={opt.value} value={opt.value}>{opt.title}</option>)}</select></div>
+        <div className="form-row"><b>처리일자</b><input className="input" type="date" value={processDate} onChange={e=>setProcessDate(e.target.value)}/></div>
+        <div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호"/></div>
+        <div className="form-row"><b>미납잔액</b><input className="input" type="number" value={unpaid} onChange={e=>setUnpaid(e.target.value)} /></div>
+        <div className="form-row"><b>추후 안내</b><select className="select" value={notify?'예':'아니오'} onChange={e=>setNotify(e.target.value==='예')}><option>예</option><option>아니오</option></select></div>
+        <div className="form-row"><b>연락완료</b><label style={{display:'flex', alignItems:'center', gap:8, fontWeight:700}}><input type="checkbox" checked={contacted} onChange={e=>setContacted(e.target.checked)} style={{width:18, height:18}}/> 연락했음</label></div>
+        {contacted && <>
+          <div className="form-row"><b>연락일자</b><input className="input" type="date" value={contactDate} onChange={e=>setContactDate(e.target.value)}/></div>
+          <div className="form-row"><b>연락방법</b><select className="select" value={contactMethod} onChange={e=>setContactMethod(e.target.value)}>{CONTACT_METHODS.map(m=><option key={m}>{m}</option>)}</select></div>
+          <div className="form-row"><b>연락메모</b><input className="input" value={contactMemo} onChange={e=>setContactMemo(e.target.value)} placeholder="예: 전화 안내 완료"/></div>
+        </>}
+        <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e=>setContent(e.target.value)} placeholder="시청 접수 후 처리, 양도 완료, 이관 처리 등" /></div>
+        <div className="action-row right" style={{marginTop:16}}>
+          <button className="btn" onClick={onClose}>취소</button>
+          <button className="btn primary" onClick={save}>저장</button>
         </div>
-      </div>
-
-      <label className="block-label"><b>처리 내용</b><textarea className="textarea" value={content} onChange={e=>setContent(e.target.value)} placeholder="시청 접수 후 처리, 양도 완료, 이관 처리 등"/></label>
-
-      <div className="action-row right">
-        <button className="btn" onClick={onClose}>취소</button>
-        <button className="btn primary" onClick={save}>저장</button>
       </div>
     </div>
   </div>

@@ -424,7 +424,7 @@ function ClosureModal({ member, onClose, onSave }){
     <div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e => setType(e.target.value)}><option>폐업</option><option>탈퇴</option><option>양도</option><option>이관</option></select></div>
     <div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호" /></div>
     <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e => setContent(e.target.value)} /></div>
-    <div className="notice"><b>폐업현황 저장 미수잔액: {formatWon(unpaidBalance)}</b><br/>화면에 보이는 현재잔액을 그대로 저장합니다. 폐업 처리 때문에 금액이 줄어들면 안 됩니다.</div>
+    <div className="notice"><b>폐업현황 저장 미수잔액: {formatWon(unpaidBalance)}</b></div>
     <div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-close" onClick={() => onSave({ type, docNo, content, unpaid_balance: unpaidBalance })}>처리 저장</button></div>
   </div></div>
 }
