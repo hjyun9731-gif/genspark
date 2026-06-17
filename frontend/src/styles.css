@@ -535,3 +535,467 @@ pre.small{background:var(--panel-soft);border:1px solid var(--line);border-radiu
   .sticky-action-col,.sticky-action-cell{position:static;box-shadow:none}
   .modal,.modal.wide{width:calc(100vw - 28px)}
 }
+
+/* ============================================================
+   실무형 재정리 오버라이드 · 표 중심 관리자 UI
+   - 검색/필터는 한 줄에 정리
+   - 표는 읽기 편하게, 장식은 최소화
+   - 카드형 과장/파스텔 과다 제거
+   ============================================================ */
+:root{
+  --bg:#f3f5f8;
+  --panel:#ffffff;
+  --panel-soft:#f9fafc;
+  --panel-head:#f6f7fa;
+  --line:#dfe3eb;
+  --line-strong:#cfd5df;
+  --line-soft:#edf0f4;
+  --ink:#172033;
+  --text:#273244;
+  --muted:#647084;
+  --sub:#8a94a6;
+  --primary:#5865d9;
+  --primary-ink:#3f4bc0;
+  --primary-tint:#eef0ff;
+  --primary-line:#d7dcff;
+  --danger:#d5455a;
+  --danger-tint:#fff0f3;
+  --danger-line:#ffd4dc;
+  --ok:#248765;
+  --ok-tint:#ecf8f4;
+  --ok-line:#cfeee2;
+  --warn:#c47a18;
+  --warn-tint:#fff5e6;
+  --warn-line:#f2dcba;
+  --r-lg:10px;
+  --r:8px;
+  --r-sm:7px;
+  --sh-1:0 1px 2px rgba(15,23,42,.04);
+  --sh-2:0 6px 18px rgba(15,23,42,.055);
+}
+html,body{font-size:14px;background:var(--bg);color:var(--text)}
+body{letter-spacing:-.015em}
+.top-nav{height:54px;padding:0 30px;background:#fff;border-bottom:1px solid var(--line);backdrop-filter:none;box-shadow:0 1px 0 rgba(15,23,42,.02)}
+.top-brand b{font-size:15px}.top-brand span{font-size:10.5px}.top-nav-btn{font-size:13px;padding:7px 12px;border-radius:8px}.top-nav-btn.active{background:var(--primary-tint);box-shadow:inset 0 0 0 1px var(--primary-line)}
+.top-health{background:#fff;padding:5px 10px}
+.top-main,.main{width:min(1680px,calc(100vw - 72px));max-width:none;margin:0 auto;padding:24px 0 56px}
+.page-title{font-size:24px;font-weight:850}.page-desc{font-size:13px;color:var(--muted)}
+.card,.summary-box,.kpi-card,.dash-card,.admin-control-card,.filter-card,.admin-list-card,.compact-filter{border-radius:12px;border-color:var(--line);box-shadow:var(--sh-1);background:#fff}
+.summary-strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.summary-box{padding:13px 16px}.summary-box span{font-size:12px}.summary-box strong{font-size:25px}
+
+/* 필터 영역: 데스크톱에서는 무조건 정리된 행 레이아웃 */
+.admin-control-card,.filter-card{padding:14px;margin-bottom:14px}
+.admin-filter-row,.filters,.compact-filter{display:grid!important;grid-template-columns:minmax(260px,2fr) repeat(6,minmax(118px,1fr)) auto auto;gap:8px;align-items:center;flex-wrap:unset!important}
+.admin-filter-row > *,.filters > *,.compact-filter > *{min-width:0!important;width:100%!important;margin:0!important}
+.admin-filter-row .btn,.filters .btn,.compact-filter .btn{width:auto!important;min-width:66px;justify-self:start}
+.admin-search,.search-wide{min-width:0!important;flex:unset!important}
+.input,.select{height:38px;min-height:38px;border-radius:8px;padding:8px 11px;font-size:13.5px;background:#fff}.select{padding-right:30px}.btn{height:38px;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:700}.btn.mini{height:30px;padding:5px 9px;font-size:12px;border-radius:7px}
+.selected-region-line{padding:8px 11px;border-radius:9px;background:#fbfcff;margin-top:9px}.mini-chip-row{gap:6px;margin-top:9px}.chip{padding:5px 10px;font-size:12px;background:#fff}
+
+/* 표: 카드보다 표가 주인공. 선명하지만 답답하지 않게 */
+.admin-list-card{overflow:hidden}.admin-list-head{height:44px;padding:0 14px;background:#fff;border-bottom:1px solid var(--line-strong)}.admin-list-head b{font-size:14px}.admin-list-head span{font-size:12.5px;color:var(--muted)}
+.admin-table-wrap,.table-wrap{background:#fff;overflow:auto}.admin-table,.table,.roster-like-table,.receivables-table,.match-table{font-size:13.5px;border-collapse:separate;border-spacing:0;line-height:1.42}.roster-like-table,.receivables-table{min-width:1450px}
+.admin-table th,.table th,.roster-like-table th,.match-table th{top:0;background:#f7f8fb;color:#596274;font-size:12px;font-weight:800;padding:10px 12px;border-bottom:1px solid var(--line-strong);height:38px}.admin-table td,.table td,.roster-like-table td,.match-table td{padding:10px 12px;border-bottom:1px solid var(--line-soft);height:42px;vertical-align:middle;background:#fff}.admin-table tbody tr:nth-child(even) td,.table tbody tr:nth-child(even) td,.roster-like-table tbody tr:nth-child(even) td,.match-table tbody tr:nth-child(even) td{background:#fcfdff}.admin-table tbody tr:hover td,.table tbody tr:hover td,.roster-like-table tbody tr:hover td,.match-table tbody tr:hover td{background:#f4f6ff!important}.admin-name,.name-link{font-size:13.5px;font-weight:800;color:#152039}.clip-cell{max-width:390px}.money,.money-main{font-weight:850;color:#101827!important}.money-sub{color:#c83d51!important;font-weight:850}.muted-cell{color:#6b7484}
+.badge{border-radius:999px;padding:3px 8px;font-size:12px;font-weight:800}.badge.blue,.badge.purple{background:#eef1ff;color:#4956c7;border-color:#d9defe}.badge.green,.badge.mint,.badge.ok{background:#e9f7f1;color:#23785b;border-color:#cceadc}.badge.red,.badge.rose{background:#fff0f3;color:#c83d51;border-color:#ffd1db}.badge.orange{background:#fff4e5;color:#b76a13;border-color:#efd8b4}.badge.gray,.badge.soft{background:#f2f4f7;color:#687386;border-color:#e3e7ee}
+.action-cell{gap:5px;min-width:210px}.sticky-action-col,.sticky-action-cell{right:0}.sticky-action-cell{background:#fff!important}.admin-table tr:nth-child(even) .sticky-action-cell{background:#fcfdff!important}.admin-table tr:hover .sticky-action-cell{background:#f4f6ff!important}
+.pager-row{height:44px;padding:0 14px;background:#fff;border-top:1px solid var(--line);font-size:12.5px}
+
+/* 모달: 지금 사용자가 좋아한 2번째 느낌 유지, 단 선명도만 정리 */
+.modal-bg{background:rgba(20,25,36,.44);backdrop-filter:blur(2px);align-items:center}.modal{border-radius:16px;border:1px solid #d9deea;box-shadow:0 22px 60px rgba(15,23,42,.22);padding:22px;background:#fff}.modern-detail-modal,.member-edit-modal,.payment-history-modal{width:min(960px,calc(100vw - 64px))}.modal-title-row{margin-bottom:16px}.modal h2,.modal h3{font-size:20px;font-weight:850}.info{border-radius:9px;background:#fbfcff;border-color:#dfe5f0;padding:10px 12px}.info b{font-size:11px}.info span{font-size:13.5px;font-weight:700;color:#202b3d}.mini-box{border-radius:10px;border-color:#dfe5f0}.detail-section{margin-top:16px;padding-top:16px}.textarea{border-radius:9px;background:#fff}
+
+/* 통장매칭 */
+.compact-summary{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.compact-summary>div{border-radius:11px;padding:12px 14px}.compact-summary strong{font-size:21px}.match-table{min-width:1180px}.match-detail-grid{grid-template-columns:repeat(3,minmax(0,1fr));padding:12px}.paste-textarea{font-size:13px;min-height:190px;background:#fbfcff}
+
+/* 대시보드 */
+.kpi-grid{gap:12px}.kpi-card{border-radius:12px;padding:16px;min-height:104px}.kpi-value{font-size:28px}.dashboard-grid-main,.dashboard-grid-sub{gap:14px}.dash-card{padding:16px}.month-box,.work-list button,.quick-grid button{border-radius:10px;background:#fff}
+
+@media(max-width:1100px){.admin-filter-row,.filters,.compact-filter{grid-template-columns:1fr 1fr}.top-main,.main{width:calc(100vw - 32px);padding-top:18px}.summary-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.top-main,.main{width:calc(100vw - 24px);padding:14px 0 40px}.admin-filter-row,.filters,.compact-filter{grid-template-columns:1fr}.summary-strip,.kpi-grid,.compact-summary{grid-template-columns:1fr 1fr}.top-nav{padding:10px 14px}.roster-like-table,.receivables-table{min-width:1180px}.modal,.modal.wide,.modern-detail-modal,.member-edit-modal{width:calc(100vw - 24px);padding:18px}.compact-info,.three-col{grid-template-columns:1fr}}
+
+/* 수입항목 파스텔 배지/패널 */
+.badge.lavender{background:#f1edff;color:#5b4bb7;border-color:#ded6ff}
+.badge.sky{background:#eaf6ff;color:#256a9b;border-color:#cfeaff}
+.badge.pink{background:#fff0f6;color:#b54372;border-color:#ffd5e5}
+.badge.yellow{background:#fff8db;color:#8a6a00;border-color:#f4e8a8}
+.badge.green{background:#eff9ed;color:#377a3a;border-color:#d6edcf}
+.income-select-panel{
+  display:grid;
+  grid-template-columns:minmax(240px,1fr) 260px auto;
+  gap:12px;
+  align-items:center;
+  margin:12px 0 16px;
+  padding:14px;
+  background:#fbfcff;
+  border:1px solid var(--line);
+  border-radius:14px;
+}
+.income-select-panel b{display:block;font-size:13px;color:var(--ink);margin-bottom:2px}
+.income-select-panel p{margin:0;color:var(--muted);font-size:12.5px}
+@media(max-width:760px){.income-select-panel{grid-template-columns:1fr}}
+
+/* ============================================================
+   현주님 취향 반영 · Stripe-like Practical SaaS UI Override
+   - 기능/JSX 건드리지 않고 CSS만 변경
+   - 화이트 베이스 + 연보라 포인트 + 파스텔 상태색
+   - 표/필터/모달 가독성 우선
+   ============================================================ */
+:root{
+  --bg:#f8f9fc;
+  --panel:#ffffff;
+  --panel-soft:#fbfcff;
+  --panel-head:#f6f8fc;
+  --line:#e6e9f2;
+  --line-strong:#d8deea;
+  --line-soft:#eef1f6;
+  --ink:#172033;
+  --ink-2:#273047;
+  --text:#384156;
+  --muted:#6e7688;
+  --sub:#99a1b3;
+  --primary:#6c63ff;
+  --primary-ink:#5148d8;
+  --primary-tint:#f0efff;
+  --primary-tint-2:#e7e5ff;
+  --primary-line:#d7d3ff;
+  --sky:#4da3ff;
+  --sky-tint:#eef7ff;
+  --sky-line:#cfe7ff;
+  --pink:#ef6f9f;
+  --pink-tint:#fff0f6;
+  --pink-line:#ffd2e3;
+  --yellow:#d7901e;
+  --yellow-tint:#fff8df;
+  --yellow-line:#f5e6ac;
+  --green:#24a06b;
+  --green-tint:#ecfbf4;
+  --green-line:#c9f0dc;
+  --danger:#e34b67;
+  --danger-tint:#fff0f3;
+  --danger-line:#ffd0d9;
+  --warn:#d48a19;
+  --warn-tint:#fff8e7;
+  --warn-line:#f3dea8;
+  --ok:#1e9e69;
+  --ok-tint:#ecfbf4;
+  --ok-line:#c9f0dc;
+  --r-lg:16px;
+  --r:12px;
+  --r-sm:9px;
+  --r-xs:7px;
+  --sh-1:0 1px 2px rgba(29,35,54,.04),0 6px 16px rgba(29,35,54,.035);
+  --sh-2:0 1px 2px rgba(29,35,54,.05),0 12px 28px rgba(29,35,54,.07);
+  --sh-pop:0 28px 80px rgba(22,27,45,.26);
+}
+html,body{
+  background:radial-gradient(circle at 20% 0%,#fbfaff 0,#f8f9fc 34%,#f6f8fb 100%) fixed;
+  color:var(--text);
+}
+body{font-size:14.5px;letter-spacing:-.012em;}
+body::selection{background:var(--primary-tint-2);}
+
+/* 상단 네비: Stripe 계열의 얇고 고급스러운 바 */
+.top-nav{
+  height:58px!important;
+  padding:0 30px!important;
+  gap:26px!important;
+  background:rgba(255,255,255,.82)!important;
+  border-bottom:1px solid rgba(216,222,234,.78)!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.8),0 10px 30px rgba(37,44,68,.035)!important;
+}
+.top-brand b{font-size:15.5px!important;font-weight:850!important;color:var(--ink)!important;}
+.top-brand span{font-size:11px!important;color:#8690a5!important;}
+.top-menu{gap:6px!important;}
+.top-nav-btn{
+  height:34px!important;padding:0 14px!important;border-radius:10px!important;
+  color:#657085!important;font-size:13.2px!important;font-weight:700!important;
+}
+.top-nav-btn:hover{background:#f3f5fb!important;color:var(--ink)!important;}
+.top-nav-btn.active{
+  background:var(--primary-tint)!important;color:var(--primary-ink)!important;
+  box-shadow:inset 0 0 0 1px var(--primary-line)!important;
+}
+.top-health{height:31px!important;background:#fff!important;border-color:var(--line)!important;box-shadow:var(--sh-1)!important;}
+.top-health i{background:#22c782!important;}
+
+/* 페이지 폭/여백 */
+.top-main,.main{
+  max-width:1680px!important;
+  padding:30px 40px 72px!important;
+  margin:0 auto!important;
+}
+.top-row{margin-bottom:18px!important;align-items:center!important;}
+.page-title{
+  font-size:25px!important;font-weight:850!important;letter-spacing:-.035em!important;color:var(--ink)!important;
+}
+.page-title::after{
+  content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--primary);margin-left:8px;vertical-align:middle;box-shadow:0 0 0 5px var(--primary-tint);
+}
+.page-desc{font-size:13.2px!important;color:#687386!important;margin-top:4px!important;}
+
+/* 카드 공통: 과한 그림자 없이 고급스럽게 */
+.card,.summary-box,.kpi-card,.dash-card,.admin-control-card,.filter-card,.compact-filter,.admin-list-card,.modal{
+  background:rgba(255,255,255,.96)!important;
+  border:1px solid var(--line)!important;
+  box-shadow:var(--sh-1)!important;
+}
+.card:hover,.summary-box:hover,.kpi-card:hover,.dash-card:hover{
+  border-color:#d9def0!important;box-shadow:var(--sh-2)!important;
+}
+
+/* KPI: Stripe dashboard처럼 큰 숫자, 얇은 보더 */
+.summary-strip,.summary-strip.four,.kpi-grid{
+  gap:16px!important;margin-bottom:18px!important;
+}
+.summary-box,.stat,.compact-summary>div,.kpi-card{
+  border-radius:16px!important;padding:18px 20px!important;min-height:96px!important;
+}
+.summary-box span,.stat-label,.compact-summary b,.kpi-label{
+  color:#687386!important;font-size:12px!important;font-weight:750!important;letter-spacing:-.01em!important;
+}
+.summary-box strong,.stat-value,.compact-summary strong,.kpi-value{
+  font-size:27px!important;font-weight:850!important;line-height:1.05!important;color:var(--ink)!important;letter-spacing:-.035em!important;
+}
+.summary-box:nth-child(2) strong,.kpi-card.red .kpi-value{color:#e14d6a!important;}
+.summary-box:nth-child(3) strong{color:#d68616!important;}
+.summary-box:nth-child(4) strong{color:var(--primary)!important;}
+
+/* 버튼: 장난감 느낌 제거, 고정 높이 */
+.btn{
+  height:36px!important;min-height:36px!important;padding:0 13px!important;border-radius:10px!important;
+  font-size:13px!important;font-weight:750!important;border-color:#dbe1ee!important;background:#fff!important;
+  color:#34405a!important;box-shadow:0 1px 1px rgba(22,30,48,.03)!important;
+}
+.btn:hover{background:#f7f8fc!important;border-color:#cfd7e8!important;box-shadow:0 3px 10px rgba(28,35,54,.05)!important;}
+.btn.primary,.btn.green{
+  background:var(--primary)!important;border-color:var(--primary)!important;color:#fff!important;
+  box-shadow:0 4px 12px rgba(108,99,255,.18)!important;
+}
+.btn.primary:hover,.btn.green:hover{background:#5d54ee!important;border-color:#5d54ee!important;}
+.btn.soft,.btn.action-pay,.action-pay,.btn.paste-btn,.btn.region-sort-btn{
+  background:var(--primary-tint)!important;border-color:var(--primary-line)!important;color:var(--primary-ink)!important;
+}
+.btn.red,.btn.action-close,.action-close,.btn.danger,.btn.danger-soft{
+  background:var(--danger-tint)!important;border-color:var(--danger-line)!important;color:var(--danger)!important;
+}
+.btn.action-edit,.action-edit,.btn.reset-btn{background:#fff!important;color:#445066!important;}
+.btn.mini{height:30px!important;min-height:30px!important;padding:0 10px!important;font-size:12.2px!important;border-radius:8px!important;}
+.action-cell{gap:7px!important;min-width:245px!important;}
+
+/* 입력/필터: 세로 늘어짐 방지, Stripe form 느낌 */
+.input,.select,.textarea{
+  height:40px!important;min-height:40px!important;border-radius:11px!important;border-color:#d8deea!important;
+  background:#fff!important;color:var(--ink-2)!important;font-size:13.7px!important;padding:0 13px!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.65)!important;
+}
+.input:focus,.select:focus,.textarea:focus{
+  border-color:var(--primary)!important;box-shadow:0 0 0 3px rgba(108,99,255,.14)!important;
+}
+.textarea{height:auto!important;padding:12px 13px!important;}
+.admin-control-card,.filter-card,.compact-filter{
+  padding:16px!important;border-radius:17px!important;margin-bottom:18px!important;
+}
+.admin-filter-row{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:wrap!important;}
+.admin-filter-row .input,.admin-filter-row .select{flex:1 1 135px!important;min-width:120px!important;max-width:220px!important;}
+.admin-filter-row .admin-search,.admin-filter-row .search-wide,.admin-search,.search-wide{
+  flex:2.4 1 340px!important;min-width:300px!important;max-width:none!important;
+}
+.admin-filter-row .btn{flex:0 0 auto!important;}
+.compact-filter{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:wrap!important;}
+.compact-filter .input{flex:1 1 420px!important;min-width:320px!important;}
+.compact-filter .select{flex:0 1 150px!important;min-width:132px!important;}
+.selected-region-line{
+  border-radius:13px!important;background:#fbfcff!important;border-color:var(--line)!important;padding:10px 13px!important;margin-top:12px!important;
+}
+.selected-region-line span{background:var(--primary-tint)!important;color:var(--primary-ink)!important;border:1px solid var(--primary-line)!important;}
+.mini-chip-row{gap:8px!important;}
+.chip{height:32px!important;padding:0 12px!important;border-radius:999px!important;background:#fff!important;color:#465169!important;font-weight:700!important;}
+.chip.active{background:var(--primary-tint)!important;border-color:var(--primary-line)!important;color:var(--primary-ink)!important;}
+
+/* 테이블: 데이터 많은 화면용. 작아도 또렷하게 */
+.admin-list-card{border-radius:17px!important;overflow:hidden!important;}
+.admin-list-head{padding:15px 18px!important;background:#fff!important;border-bottom:1px solid var(--line)!important;}
+.admin-list-head b{font-size:14.5px!important;font-weight:850!important;color:var(--ink)!important;}
+.admin-list-head span{font-size:12.6px!important;color:#687386!important;}
+.admin-table,.table,.roster-like-table,.receivables-table,.match-table{
+  font-size:13.6px!important;color:#253047!important;border-collapse:separate!important;border-spacing:0!important;
+}
+.admin-table th,.table th,.roster-like-table th,.receivables-table th,.match-table th{
+  background:#f8f9fd!important;color:#5e687b!important;font-size:12.15px!important;font-weight:800!important;
+  padding:12px 13px!important;border-bottom:1px solid #dfe5f1!important;white-space:nowrap!important;
+}
+.admin-table td,.table td,.roster-like-table td,.receivables-table td,.match-table td{
+  padding:12px 13px!important;border-bottom:1px solid #edf1f7!important;vertical-align:middle!important;line-height:1.45!important;
+}
+.admin-table tbody tr:hover td,.table tbody tr:hover td,.roster-like-table tbody tr:hover td,.match-table tbody tr:hover td{
+  background:#fbfbff!important;
+}
+.admin-name,.name-link{font-size:13.7px!important;font-weight:850!important;color:#151d31!important;}
+.money,.money-main,.money-sub,.money-accent{font-weight:850!important;font-variant-numeric:tabular-nums!important;}
+.money-main{color:#0f172a!important;}
+.money-sub{color:#e14d6a!important;}
+.clip-cell{max-width:420px!important;}
+.roster-like-table,.receivables-table{min-width:1500px!important;}
+.sticky-action-col{right:0!important;background:#f8f9fd!important;box-shadow:-14px 0 18px rgba(31,39,59,.05)!important;}
+.sticky-action-cell{right:0!important;background:#fff!important;box-shadow:-14px 0 18px rgba(31,39,59,.04)!important;}
+.admin-table tr:hover .sticky-action-cell{background:#fbfbff!important;}
+.pager-row{padding:13px 18px!important;background:#fff!important;color:#687386!important;}
+.empty-cell{color:#8b94a8!important;background:#fbfcff!important;}
+
+/* 배지: 사용자 취향 파스텔. 상태만 컬러 */
+.badge{height:25px!important;padding:0 9px!important;border-radius:999px!important;font-size:11.8px!important;font-weight:800!important;}
+.badge.blue,.badge.purple{background:var(--primary-tint)!important;color:var(--primary-ink)!important;border-color:var(--primary-line)!important;}
+.badge.green,.badge.mint,.badge.ok{background:var(--green-tint)!important;color:#168458!important;border-color:var(--green-line)!important;}
+.badge.red,.badge.rose{background:var(--pink-tint)!important;color:#dc4d7e!important;border-color:var(--pink-line)!important;}
+.badge.orange{background:var(--yellow-tint)!important;color:#a96d14!important;border-color:var(--yellow-line)!important;}
+.badge.gray,.badge.soft{background:#f3f5fa!important;color:#687386!important;border-color:#e4e8f1!important;}
+/* 항목 배지용 파스텔 변형 */
+.badge.fee-assoc{background:#f0efff!important;color:#5148d8!important;border-color:#d7d3ff!important;}
+.badge.fee-manage{background:#eef7ff!important;color:#2677c9!important;border-color:#cfe7ff!important;}
+.badge.fee-join{background:#fff0f6!important;color:#d84e82!important;border-color:#ffd2e3!important;}
+.badge.fee-cert{background:#fff8df!important;color:#a96d14!important;border-color:#f5e6ac!important;}
+.badge.fee-done{background:#ecfbf4!important;color:#168458!important;border-color:#c9f0dc!important;}
+
+/* 대시보드: Stripe 카드 그리드 느낌 */
+.dashboard-grid-main,.dashboard-grid-sub,.dashboard-grid-sub.bottom-info{gap:18px!important;}
+.dash-card{border-radius:17px!important;padding:20px!important;}
+.dash-card-head h3{font-size:15px!important;font-weight:850!important;color:var(--ink)!important;}
+.dash-card-head span{color:#7c8597!important;}
+.region-row,.account-row{border-radius:11px!important;padding:10px 8px!important;}
+.region-row:hover,.account-row:hover{background:#f8f9ff!important;}
+.region-row .bar,.ratio-line>div,.stack-bar{background:#edf1f7!important;}
+.region-row .bar i,.ratio-line>div i,.stack-bar i.indigo{background:linear-gradient(90deg,#8b84ff,#6c63ff)!important;}
+.month-box,.work-list button,.quick-grid button{
+  background:#fff!important;border-color:var(--line)!important;border-radius:14px!important;box-shadow:var(--sh-1)!important;
+}
+.month-box strong,.work-list button strong{font-weight:850!important;}
+
+/* 모달: 사진 2번처럼 깔끔하되 더 고급스럽게 */
+.modal-bg{background:rgba(21,27,42,.50)!important;backdrop-filter:blur(5px)!important;}
+.modal{border-radius:18px!important;padding:24px!important;box-shadow:var(--sh-pop)!important;}
+.modal-title-row{margin-bottom:18px!important;}
+.modal h2,.modal h3{font-size:20px!important;font-weight:850!important;color:var(--ink)!important;}
+.info{background:#fbfcff!important;border-color:#dfe5f1!important;border-radius:12px!important;padding:11px 13px!important;}
+.info b{font-size:11.3px!important;color:#7a8499!important;font-weight:800!important;}
+.info span{font-size:13.8px!important;color:#202a40!important;font-weight:650!important;}
+.detail-section{border-top-color:#edf1f7!important;}
+.mini-box,.modal-table-scroll{border-color:#dfe5f1!important;border-radius:13px!important;}
+.notice{background:var(--yellow-tint)!important;border-color:var(--yellow-line)!important;color:#9b6412!important;}
+.action-row{gap:9px!important;}
+
+/* 통장매칭/붙여넣기 */
+.paste-textarea{background:#0f172a!important;color:#e6edf7!important;border-color:#24304a!important;border-radius:14px!important;font-size:13px!important;}
+.match-detail-grid>div{border-radius:12px!important;border-color:#dfe5f1!important;background:#fff!important;}
+.bank-tab{height:33px!important;border-radius:999px!important;background:#fff!important;color:#657085!important;font-weight:750!important;}
+.bank-tab.active{background:var(--primary-tint)!important;color:var(--primary-ink)!important;border-color:var(--primary-line)!important;}
+
+/* 모바일은 자연스럽게 쌓기 */
+@media(max-width:900px){
+  .top-main,.main{padding:18px 14px 48px!important;}
+  .top-nav{padding:10px 14px!important;height:auto!important;gap:10px!important;}
+  .summary-strip,.summary-strip.four,.kpi-grid,.compact-summary,.compact-summary.four{grid-template-columns:1fr 1fr!important;}
+  .admin-filter-row,.compact-filter{display:flex!important;flex-wrap:wrap!important;}
+  .admin-filter-row .input,.admin-filter-row .select,.admin-filter-row .admin-search,.admin-filter-row .search-wide,.compact-filter .input,.compact-filter .select{flex:1 1 100%!important;min-width:0!important;max-width:none!important;}
+  .admin-table-wrap,.table-wrap{overflow:auto!important;}
+  .action-cell{min-width:180px!important;}
+}
+@media(max-width:560px){
+  .summary-strip,.summary-strip.four,.kpi-grid,.compact-summary,.compact-summary.four{grid-template-columns:1fr!important;}
+  .page-title{font-size:22px!important;}
+  .summary-box strong,.kpi-value{font-size:24px!important;}
+}
+
+/* ============================================================
+   FINAL DESKTOP READABILITY FIX
+   - 데스크톱/태블릿에서 필터가 세로로 길게 늘어지는 현상 방지
+   - 모바일 전용 화면은 별도 코드가 있으므로 웹 데스크톱 CSS는 640px 이하에서만 세로 정렬
+   ============================================================ */
+@media (min-width: 641px) {
+  .top-main,
+  .main {
+    max-width: 1680px !important;
+    padding: 30px 40px 72px !important;
+  }
+
+  .summary-strip,
+  .summary-strip.four {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+  }
+
+  .admin-control-card {
+    padding: 16px 18px !important;
+  }
+
+  .admin-filter-row {
+    display: grid !important;
+    grid-template-columns: minmax(260px, 2.2fr) repeat(4, minmax(118px, 1fr)) minmax(118px, 1fr) minmax(130px, 1fr) minmax(112px, .8fr) auto auto auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .admin-filter-row .input,
+  .admin-filter-row .select,
+  .admin-filter-row .admin-search,
+  .admin-filter-row .search-wide {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: initial !important;
+    margin: 0 !important;
+  }
+
+  .admin-filter-row .btn {
+    width: auto !important;
+    flex: initial !important;
+    margin: 0 !important;
+  }
+
+  .admin-filter-row .region-sort-btn {
+    min-width: 94px !important;
+  }
+
+  .selected-region-line {
+    margin-top: 12px !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1180px) {
+  .admin-filter-row {
+    grid-template-columns: minmax(280px, 2fr) repeat(3, minmax(140px, 1fr)) auto auto !important;
+  }
+
+  .admin-filter-row .btn.region-sort-btn,
+  .admin-filter-row .btn.reset-btn {
+    min-width: 92px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-filter-row,
+  .compact-filter {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .admin-filter-row .input,
+  .admin-filter-row .select,
+  .admin-filter-row .btn,
+  .compact-filter .input,
+  .compact-filter .select,
+  .compact-filter .btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .summary-strip,
+  .summary-strip.four,
+  .kpi-grid,
+  .compact-summary,
+  .compact-summary.four {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
