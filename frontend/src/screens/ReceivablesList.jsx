@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Badge, Card, PageHead, formatWon, formatNum } from '../components.jsx'
 import { SIGUN, getOpenArrears } from '../data.js'
 
@@ -127,7 +127,6 @@ function makeMemoFromFields(fields){
 }
 
 export default function ReceivablesList({ data, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure }){
-  const [searchInput, setSearchInput] = useState(preset?.q || '')
   const [q, setQ] = useState(preset?.q || '')
   const [sigun, setSigun] = useState(preset?.sigun || '전체')
   const [membership, setMembership] = useState('전체')
@@ -145,17 +144,8 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const [paymentMember, setPaymentMember] = useState(null)
   const [highlightMemberId, setHighlightMemberId] = useState(preset?.memberId || null)
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setQ(searchInput)
-      setPage(1)
-    }, 220)
-    return () => window.clearTimeout(timer)
-  }, [searchInput])
-
   React.useEffect(() => {
     if (!preset) return
-    setSearchInput(preset.q || '')
     setQ(preset.q || '')
     setSigun(preset.sigun || '전체')
     setAmount(preset.amount || '전체')
@@ -245,7 +235,6 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   function paymentsFor(member){ return memberPayments(data, member) }
 
   function resetFilters(){
-    setSearchInput('')
     setQ('')
     setSigun('전체')
     setMembership('전체')
@@ -291,7 +280,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
 
     <Card className="admin-control-card">
       <div className="admin-filter-row">
-        <input className="input admin-search" value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder="이름, 차량번호, 관리번호, 핸드폰번호, 주소 검색" />
+        <input className="input admin-search" value={q} onChange={e => { setQ(e.target.value); setPage(1) }} placeholder="이름, 차량번호, 관리번호, 핸드폰번호, 주소 검색" />
         <select className="select" value={sigun} onChange={e => { setSigun(e.target.value); setPage(1) }}>
           <option value="전체">전체 지역</option>
           {SIGUN.map(name => <option key={name} value={name}>{name}</option>)}
@@ -426,7 +415,19 @@ function PaymentModal({ member, onClose, onSave }){
     <div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-pay" onClick={() => onSave(amount, method, chargeItem)}>반영</button></div>
   </div></div>
 }
-function ClosureModal({ member, onClose, onSave }){ const [type, setType] = useState('폐업'); const [docNo, setDocNo] = useState(''); const [content, setContent] = useState('시청 접수 후 처리'); return <div className="modal-bg"><div className="modal"><h3>폐업/이탈 등록</h3><div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e => setType(e.target.value)}><option>폐업</option><option>탈퇴</option><option>양도</option><option>이관</option></select></div><div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호" /></div><div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e => setContent(e.target.value)} /></div><div className="notice">현재 미수잔액 {formatWon(member.totalArrears)} 기준으로 폐업현황에 저장됩니다.</div><div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-close" onClick={() => onSave({ type, docNo, content })}>처리 저장</button></div></div></div> }
+function ClosureModal({ member, onClose, onSave }){
+  const [type, setType] = useState('폐업')
+  const [docNo, setDocNo] = useState('')
+  const [content, setContent] = useState('시청 접수 후 처리')
+  const unpaidBalance = Number(member.totalArrears ?? member.arrearsAmount ?? 0) || 0
+  return <div className="modal-bg"><div className="modal"><h3>폐업/이탈 등록</h3>
+    <div className="form-row"><b>처리사유</b><select className="select" value={type} onChange={e => setType(e.target.value)}><option>폐업</option><option>탈퇴</option><option>양도</option><option>이관</option></select></div>
+    <div className="form-row"><b>관리번호</b><input className="input" value={docNo} onChange={e => setDocNo(e.target.value)} placeholder="관리번호 또는 접수번호" /></div>
+    <div className="form-row"><b>내용</b><textarea className="textarea" value={content} onChange={e => setContent(e.target.value)} /></div>
+    <div className="notice"><b>폐업현황 저장 미수잔액: {formatWon(unpaidBalance)}</b><br/>화면에 보이는 현재잔액을 그대로 저장합니다. 폐업 처리 때문에 금액이 줄어들면 안 됩니다.</div>
+    <div className="action-row right"><button type="button" className="btn" onClick={onClose}>취소</button><button type="button" className="btn action-close" onClick={() => onSave({ type, docNo, content, unpaid_balance: unpaidBalance })}>처리 저장</button></div>
+  </div></div>
+}
 
 function MemberEditModal({ member, onClose, onSave }){
   const [form, setForm] = useState({

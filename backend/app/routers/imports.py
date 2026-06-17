@@ -555,25 +555,12 @@ def _member_match_maps(db: Session) -> tuple[dict[str, Member | None], dict[tupl
     by_vehicle: dict[str, Member | None] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
     last4_seen: dict[str, Member | None] = {}
-    name_seen: dict[str, Member | None] = {}
 
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
             by_vehicle[vn] = member
         last4 = _vehicle_last4(member.vehicle_no)
-
-        # 이름 후보는 회사명/대표자/괄호/공백 차이를 전부 풀어서 만든다.
-        # 예: ㈜HRH(대표 : 김 남 진) -> {HRH김남진, 김남진, ...}
-        name_cands = _name_candidates(member.name)
-
-        for nm in name_cands:
-            if nm not in name_seen:
-                name_seen[nm] = member
-            elif name_seen[nm] is not member:
-                # 동명이인은 이름 단독 매칭 금지. 차량 뒤4자리까지 봐야 한다.
-                name_seen[nm] = None
-
         if last4:
             # 미수금 파일 차량번호가 2107처럼 뒤4자리만 있는 경우가 많다.
             # 뒤4자리가 유일한 경우만 직접 매칭하고, 중복이면 이름 후보로 다시 판별한다.
@@ -581,18 +568,11 @@ def _member_match_maps(db: Session) -> tuple[dict[str, Member | None], dict[tupl
                 last4_seen[last4] = member
             else:
                 last4_seen[last4] = None
-            for nm in name_cands:
+            for nm in _name_candidates(member.name):
                 by_name_last4[(nm, last4)] = member
 
     for last4, member in last4_seen.items():
         by_vehicle[f"LAST4:{last4}"] = member
-
-    # 차량번호가 짧거나 중복/표기불일치로 실패하는 경우를 대비한 이름 단독 유일 매칭.
-    # 단, 동명이인은 None으로 막아 오매칭을 방지한다.
-    for nm, member in name_seen.items():
-        if member is not None:
-            by_name_last4[(f"NAMEONLY:{nm}", "")] = member
-
     return by_vehicle, by_name_last4
 
 
@@ -602,27 +582,15 @@ def _find_member_from_maps(by_vehicle: dict[str, Member | None], by_name_last4: 
         return by_vehicle[vn]
 
     last4 = _vehicle_last4(vehicle_no)
-    name_cands = _name_candidates(name)
     if last4:
-        # 1순위: 이름 후보 + 차량 뒤4자리
-        for nm in name_cands:
+        for nm in _name_candidates(name):
             member = by_name_last4.get((nm, last4))
             if member:
                 return member
-
-        # 2순위: 차량 뒤4자리가 원장 전체에서 유일하면 매칭
+        # 차량 뒤4자리가 유일하면 이름 표기가 달라도 매칭한다.
         member = by_vehicle.get(f"LAST4:{last4}")
         if member is not None:
             return member
-
-    # 3순위: 이름 후보가 원장 전체에서 유일하면 매칭
-    # 김남진처럼 미수금 파일명(㈜HRH김남진)과 원장명(㈜HRH(대표 : 김 남 진))이 다르고
-    # 차량번호가 짧게 들어온 케이스를 전체 공통으로 처리한다.
-    for nm in name_cands:
-        member = by_name_last4.get((f"NAMEONLY:{nm}", ""))
-        if member:
-            return member
-
     return None
 
 

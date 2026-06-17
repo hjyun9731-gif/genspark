@@ -47,40 +47,6 @@ def _infer_income_item(deposit: Deposit, member: Member | None = None) -> str:
     return (member.charge_item if member and member.charge_item else "관리비")
 
 
-
-
-def _ensure_income_member(db: Session) -> Member:
-    """회원과 무관한 잡수입/기타수입을 수납내역에 남기기 위한 내부용 가상 회원."""
-    member = db.get(Member, "SYS-INCOME")
-    if member is not None:
-        return member
-    member = Member(
-        id="SYS-INCOME",
-        mgmt_no="수입-0000",
-        reg_type="기타",
-        name="회원외 수입",
-        vehicle_no="-",
-        phone=None,
-        sigun="기타",
-        region_raw="기타",
-        member_type="기타",
-        membership="기타",
-        birth_year=None,
-        cert_issue_date=None,
-        assoc_join_date=None,
-        billing_start_ym=None,
-        charge_item="기타",
-        monthly_charge=0,
-        last_payment_ym=None,
-        status="수입",
-        is_disconnected=False,
-        cert_missing=False,
-        memo="회원 선택 없이 처리한 잡수입/기타수입 전용 내부 계정",
-    )
-    db.add(member)
-    db.flush()
-    return member
-
 def _ym_from_date(d: date | None) -> str:
     d = _safe_deposit_date(d) if d else date.today()
     return d.strftime("%Y-%m")
@@ -103,168 +69,6 @@ def _safe_deposit_date(d: date) -> date:
     return d
 
 
-
-
-
-
-# 대납자/묶음수납 사전
-# - 입금자 한 명이 여러 회원 회비를 한 번에 내는 고정 패턴
-# - 금액만으로 자동 후보를 만들지 않고, 이 사전에 등록된 입금자명일 때만 묶음수납 후보로 표시한다.
-GROUP_PAYER_PRESETS = [
-    {
-        "code": "조철만",
-        "title": "조철만 · 합동1",
-        "aliases": ["조철만", "합동1"],
-        "expected_amount": 110000,
-        "targets": [
-            {"name": "이상오", "vehicle_last4": "6140", "amount": 10000, "charge_item": "협회비"},
-            {"name": "김민종", "vehicle_last4": "6152", "amount": 10000, "charge_item": "협회비"},
-            {"name": "이창환", "vehicle_last4": "6160", "amount": 10000, "charge_item": "협회비"},
-            {"name": "문용빈", "vehicle_last4": "6212", "amount": 10000, "charge_item": "협회비"},
-            {"name": "이기석", "vehicle_last4": "8681", "amount": 10000, "charge_item": "협회비"},
-            {"name": "김형철", "vehicle_last4": "2388", "amount": 10000, "charge_item": "협회비"},
-            {"name": "이현정", "vehicle_last4": "2423", "amount": 10000, "charge_item": "협회비"},
-            {"name": "조철만", "vehicle_last4": "6209", "amount": 10000, "charge_item": "협회비"},
-            {"name": "김창진", "vehicle_last4": "8656", "amount": 5000, "charge_item": "협회비"},
-            {"name": "함영근", "vehicle_last4": "2340", "amount": 5000, "charge_item": "협회비"},
-            {"name": "박준형", "vehicle_last4": "6165", "amount": 10000, "charge_item": "협회비"},
-            {"name": "조현우", "vehicle_last4": "6170", "amount": 10000, "charge_item": "협회비"},
-        ],
-    },
-    {
-        "code": "허장덕",
-        "title": "허장덕 · 합동2",
-        "aliases": ["허장덕", "합동2"],
-        "expected_amount": 70000,
-        "targets": [
-            {"name": "이주석", "vehicle_last4": "2087", "amount": 10000, "charge_item": "협회비"},
-            {"name": "이상천", "vehicle_last4": "6208", "amount": 10000, "charge_item": "협회비"},
-            {"name": "고장영", "vehicle_last4": "6323", "amount": 10000, "charge_item": "협회비"},
-            {"name": "장상봉", "vehicle_last4": "8662", "amount": 10000, "charge_item": "협회비"},
-            {"name": "김동규", "vehicle_last4": "2424", "amount": 10000, "charge_item": "협회비"},
-            {"name": "허장덕", "vehicle_last4": "2106", "amount": 10000, "charge_item": "협회비"},
-            {"name": "박유호", "vehicle_last4": "8524", "amount": 5000, "charge_item": "협회비"},
-            {"name": "김두후", "vehicle_last4": "8671", "amount": 5000, "charge_item": "협회비"},
-        ],
-    },
-    {
-        "code": "주신평",
-        "title": "주신평 · 3개월분",
-        "aliases": ["주신평", "주신평3개월", "주신평(3개월)"],
-        "expected_amount": 210000,
-        "targets": [
-            {"name": "김영관", "vehicle_last4": "1518", "amount": 30000, "charge_item": "협회비"},
-            {"name": "장형일", "vehicle_last4": "1289", "amount": 30000, "charge_item": "협회비"},
-            {"name": "임종표", "vehicle_last4": "1251", "amount": 30000, "charge_item": "협회비"},
-            {"name": "박민경", "vehicle_last4": "1154", "amount": 30000, "charge_item": "협회비"},
-            {"name": "김성섭", "vehicle_last4": "1150", "amount": 30000, "charge_item": "협회비"},
-            {"name": "이용희", "vehicle_last4": "1130", "amount": 30000, "charge_item": "협회비"},
-            {"name": "이민성", "vehicle_last4": "1841", "amount": 30000, "charge_item": "협회비"},
-        ],
-    },
-]
-
-
-def _find_group_preset(deposit: Deposit) -> dict | None:
-    text = _name_norm(f"{deposit.depositor_name or ''} {deposit.memo or ''}")
-    amount = int(deposit.amount or 0)
-    matched = []
-    for preset in GROUP_PAYER_PRESETS:
-        if any(_name_norm(a) and _name_norm(a) in text for a in preset.get("aliases", [])):
-            matched.append(preset)
-    if not matched:
-        return None
-    # 같은 별칭이 여러 개 걸리면 입금액이 가장 가까운 묶음을 우선한다.
-    matched.sort(key=lambda p: abs(amount - int(p.get("expected_amount") or 0)))
-    return matched[0]
-
-
-def _find_member_for_group_target(target: dict, members: list[Member]) -> Member | None:
-    target_name = _name_norm(target.get("name"))
-    target_last4 = _digits(target.get("vehicle_last4"))[-4:]
-    exact = []
-    by_last4 = []
-    by_name = []
-    for m in members:
-        if m.status != "정상":
-            continue
-        name_ok = target_name and target_name in _name_norm(m.name)
-        last4_ok = target_last4 and _vehicle_last4(m.vehicle_no) == target_last4
-        if name_ok and last4_ok:
-            exact.append(m)
-        elif last4_ok:
-            by_last4.append(m)
-        elif name_ok:
-            by_name.append(m)
-    if len(exact) == 1:
-        return exact[0]
-    if len(by_last4) == 1:
-        return by_last4[0]
-    if len(by_name) == 1:
-        return by_name[0]
-    return None
-
-
-def _group_candidate_dict(deposit: Deposit, members: list[Member]) -> dict | None:
-    preset = _find_group_preset(deposit)
-    if not preset:
-        return None
-    targets = []
-    resolved = 0
-    for t in preset.get("targets", []):
-        m = _find_member_for_group_target(t, members)
-        arrears = _arrears_amount(m) if m else 0
-        if m:
-            resolved += 1
-        targets.append({
-            "name": t.get("name"),
-            "vehicleLast4": t.get("vehicle_last4"),
-            "amount": int(t.get("amount") or 0),
-            "chargeItem": t.get("charge_item") or "협회비",
-            "memberId": m.id if m else None,
-            "memberName": m.name if m else None,
-            "vehicleNo": m.vehicle_no if m else None,
-            "mgmtNo": m.mgmt_no if m else None,
-            "currentArrears": arrears,
-            "resolved": bool(m),
-        })
-    expected = sum(int(x.get("amount") or 0) for x in preset.get("targets", []))
-    return {
-        "code": preset.get("code"),
-        "title": preset.get("title") or preset.get("code"),
-        "expectedAmount": expected,
-        "depositAmount": int(deposit.amount or 0),
-        "diff": int(deposit.amount or 0) - expected,
-        "resolvedCount": resolved,
-        "targetCount": len(targets),
-        "targets": targets,
-        "reason": "대납자/묶음수납 사전 일치",
-    }
-
-
-def _apply_member_amount(db: Session, member: Member, amount: int, charge_item: str, paid_date: date, deposit: Deposit, note: str) -> int:
-    """묶음수납 1명분을 반영한다. 미수가 없거나 남은 금액은 선납/추가입금으로 남긴다."""
-    remain = max(0, int(amount or 0))
-    applied = 0
-    for item in _open_items(member):
-        if remain <= 0:
-            break
-        pay_amount = min(remain, item.amount)
-        if pay_amount <= 0:
-            continue
-        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        applied += pay_amount
-        remain -= pay_amount
-        if pay_amount >= item.amount:
-            item.is_paid = True
-        else:
-            item.amount -= pay_amount
-        member.last_payment_ym = item.ym
-    if remain > 0:
-        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=charge_item or member.charge_item or "협회비", amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        applied += remain
-    db.add(MemberHistory(member_id=member.id, content=f"{note}: {applied:,}원", actor="system"))
-    return applied
 
 
 def _parse_deposit_date(v) -> date:
@@ -313,93 +117,6 @@ def _name_norm(text: str | None) -> str:
 
 def _text_for_match(deposit: Deposit) -> str:
     return _name_norm(f"{deposit.depositor_name or ''} {deposit.memo or ''}")
-
-
-# 비고란/메모에서 입금자 별칭을 추출해 통장매칭 후보에 사용한다.
-# 예: "이체 정 홍 영" / "김 혜 숙, 신 대 균" / "공: 김강훈" / "오 영 숙"
-# 단, "15일이체", "계좌적기", "지로x" 같은 업무 메모는 별칭으로 쓰지 않는다.
-ALIAS_STOP_WORDS = {
-    "이체", "자동이체", "계좌적기", "계좌번호적기", "계좌번호", "계좌문자발송",
-    "지로", "지로X", "지로x", "문자발송", "문자발송X", "문자발송x",
-    "가족양도", "신평", "합동", "속초개인용달", "강릉시", "인제군", "고성군",
-    "양양지역자활센터", "영월지역자활센터", "수현화물", "해광공업사", "설악안전",
-    "한진택배", "택배", "부과", "이어서", "이어져", "이이서", "계좌", "지점코드",
-    "출연금", "미납", "포함", "감면", "감액", "신규등록", "공문", "공",
-}
-
-ALIAS_ADMIN_PATTERNS = [
-    r"\d+\s*일\s*이체",
-    r"\d+개월\s*단위",
-    r"\d+개월마다",
-    r"\d+년치",
-    r"\d+에\s*이어[서져]?",
-    r"\d+\s*이어서",
-    r"\d+\s*이이서",
-    r"\d+\s*부터",
-    r"\d+\s*월",
-    r"\d+\s*대\s*->\s*\d+\s*대",
-    r"지점코드\s*\d+",
-]
-
-
-def _hangul_name_norm(v: str | None) -> str:
-    return re.sub(r"[^가-힣]", "", v or "")
-
-
-def _remark_aliases(member: Member) -> list[str]:
-    """회원 memo/비고에서 통장 입금자 별칭을 뽑는다.
-
-    전체면허자현황 업로드 시 비고는 Member.memo 안에 '비고:...' 형태로 저장된다.
-    여기서 사람 이름처럼 보이는 2~5글자 한글 토큰을 별칭으로 둔다.
-    행정 메모(이체, 계좌적기, 15일이체 등)는 제외한다.
-    """
-    raw = member.memo or ""
-    if not raw:
-        return []
-    # 비고/전화메모 영역 위주로 보되, 기존 데이터 호환을 위해 전체 memo에서도 추출한다.
-    chunks = []
-    for m in re.finditer(r"(?:비고\d*|전화\s*메모)\s*[:：]\s*([^/]+)", raw):
-        chunks.append(m.group(1))
-    if not chunks:
-        chunks = [raw]
-
-    aliases: list[str] = []
-    member_name_norm = _hangul_name_norm(member.name)
-    for chunk in chunks:
-        text = str(chunk or "").replace("\u3000", " ")
-        for pat in ALIAS_ADMIN_PATTERNS:
-            text = re.sub(pat, " ", text, flags=re.I)
-        # 콤마/슬래시/콜론으로 구분되는 이름들: "김 혜 숙, 신 대 균" / "이체, 조 종 철"
-        # 따옴표 안의 이름도 같이 처리
-        tokens = re.split(r"[,/|;·]+", text)
-        for token in tokens:
-            t = token.strip()
-            if not t:
-                continue
-            # 업무 키워드는 제거하고 남은 한글 이름만 본다.
-            for stop in sorted(ALIAS_STOP_WORDS, key=len, reverse=True):
-                t = re.sub(re.escape(stop), " ", t, flags=re.I)
-            # '이체 정 홍 영', '공: 김강훈', '윤 갑 순' 같은 형태
-            for name in re.findall(r"[가-힣](?:\s*[가-힣]){1,4}", t):
-                alias = _hangul_name_norm(name)
-                if not (2 <= len(alias) <= 5):
-                    continue
-                if alias == member_name_norm:
-                    continue
-                if alias in ALIAS_STOP_WORDS:
-                    continue
-                # 지역/단체성 단어 제외
-                if alias.endswith(("시", "군", "센터", "화물", "용달", "공업사", "정비", "협동조합")):
-                    continue
-                aliases.append(alias)
-    # 중복 제거, 긴 이름 우선
-    seen = set()
-    out = []
-    for a in sorted(aliases, key=lambda x: (-len(x), x)):
-        if a not in seen:
-            seen.add(a)
-            out.append(a)
-    return out[:8]
 
 
 @dataclass
@@ -460,17 +177,11 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
         last4 = _vehicle_last4(member.vehicle_no)
         phone4 = _digits(member.phone)[-4:] if member.phone else ""
         mgmt = _name_norm(member.mgmt_no)
-        aliases = _remark_aliases(member)
 
         if nm and nm in text:
             score += 55
             primary_match = True
             reasons.append("이름일치")
-        matched_alias = next((a for a in aliases if _name_norm(a) and _name_norm(a) in text), None)
-        if matched_alias:
-            score += 48
-            primary_match = True
-            reasons.append(f"비고별칭:{matched_alias}")
         if last4 and last4 in dep_digits:
             score += 50
             primary_match = True
@@ -547,10 +258,7 @@ def list_deposits(
     rows = []
     for d in deposits:
         candidates = _match_candidates(d, members) if d.status not in {"매칭완료", "제외"} else []
-        group_candidate = _group_candidate_dict(d, members) if d.status not in {"매칭완료", "제외"} else None
         display_status = _display_status(d, candidates)
-        if group_candidate:
-            display_status = "묶음수납"
         if status and display_status != status and d.status != status:
             continue
         best = candidates[0] if candidates else None
@@ -573,12 +281,10 @@ def list_deposits(
             "hint": d.hint,
             "matchStatus": display_status,
             "candidates": [_member_candidate_dict(c) for c in candidates],
-            "groupCandidate": group_candidate,
-            "groupCandidates": [group_candidate] if group_candidate else [],
             "bestCandidate": _member_candidate_dict(best) if best else None,
-            "currentArrears": (group_candidate.get("expectedAmount") if group_candidate else best.arrears_amount if best else 0),
-            "difference": (group_candidate.get("diff") if group_candidate else best.diff if best else None),
-            "candidateCount": (1 if group_candidate else len(candidates)),
+            "currentArrears": best.arrears_amount if best else 0,
+            "difference": best.diff if best else None,
+            "candidateCount": len(candidates),
         })
     return rows
 
@@ -675,110 +381,6 @@ def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(
     db.add(MemberHistory(member_id=member.id, content=history, actor="system"))
     db.commit()
     return {"ok": True, "deposit_id": deposit.id, "member_id": member.id, "applied": applied, "remain": remain}
-
-
-@router.post("/{deposit_id}/income")
-def match_deposit_income_only(deposit_id: int, payload: dict = Body(...), db: Session = Depends(get_db)):
-    """회원 선택 없이 잡수입/기타수입/가수금으로 입금건을 반영한다.
-
-    협회비/관리비처럼 미수금을 차감하는 항목은 회원이 필수이므로 이 API에서 막는다.
-    """
-    deposit = db.get(Deposit, deposit_id)
-    if deposit is None:
-        raise HTTPException(status_code=404, detail="입금내역을 찾을 수 없습니다.")
-    if deposit.is_excluded:
-        raise HTTPException(status_code=400, detail="제외 처리된 입금건은 반영할 수 없습니다.")
-
-    charge_item = (payload or {}).get("charge_item") or "기타"
-    if not _is_non_arrears_income(charge_item):
-        raise HTTPException(status_code=400, detail="협회비/관리비는 회원 선택 후 반영해야 합니다.")
-
-    paid_date = _safe_deposit_date(deposit.deposit_date)
-    amount = int(deposit.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="입금액이 0원인 거래는 반영할 수 없습니다.")
-
-    income_member = _ensure_income_member(db)
-    db.add(Payment(
-        member_id=income_member.id,
-        paid_for_ym=_ym_from_date(paid_date),
-        charge_item=charge_item,
-        amount=amount,
-        method="통장매칭",
-        paid_date=paid_date,
-        deposit_id=deposit.id,
-    ))
-    deposit.status = "매칭완료"
-    deposit.matched_member_id = income_member.id
-    deposit.hint = f"회원 없이 {charge_item}({_accounting_type(charge_item)}) {amount:,}원 반영"
-    db.add(MemberHistory(member_id=income_member.id, content=f"통장매칭 회원외 {charge_item}({_accounting_type(charge_item)}) 수납 {amount:,}원", actor="system"))
-    db.commit()
-    return {"ok": True, "deposit_id": deposit.id, "member_id": income_member.id, "applied": amount, "remain": 0, "non_arrears": True, "income_only": True, "accounting_type": _accounting_type(charge_item)}
-
-
-
-
-@router.post("/{deposit_id}/group-match")
-def match_deposit_group(deposit_id: int, payload: dict = Body(default={}), db: Session = Depends(get_db)):
-    """대납자/묶음수납 반영: 입금 1건을 여러 회원 수납내역으로 나눠 저장한다."""
-    deposit = db.get(Deposit, deposit_id)
-    if deposit is None:
-        raise HTTPException(status_code=404, detail="입금내역을 찾을 수 없습니다.")
-    if deposit.is_excluded:
-        raise HTTPException(status_code=400, detail="제외 처리된 입금건은 반영할 수 없습니다.")
-    if deposit.status in {"매칭완료", "반영완료"}:
-        raise HTTPException(status_code=400, detail="이미 반영된 입금건입니다.")
-
-    members = db.scalars(select(Member).options(selectinload(Member.receivable_items)).where(Member.status == "정상")).unique().all()
-    preset = None
-    requested = (payload or {}).get("group_code")
-    if requested:
-        preset = next((p for p in GROUP_PAYER_PRESETS if p.get("code") == requested), None)
-    if preset is None:
-        preset = _find_group_preset(deposit)
-    if preset is None:
-        raise HTTPException(status_code=400, detail="등록된 대납자 묶음수납 사전과 일치하지 않습니다.")
-
-    paid_date = _safe_deposit_date(deposit.deposit_date)
-    applied_total = 0
-    unresolved = []
-    applied_rows = []
-    for target in preset.get("targets", []):
-        member = _find_member_for_group_target(target, members)
-        amount = int(target.get("amount") or 0)
-        if member is None:
-            unresolved.append({"name": target.get("name"), "vehicle_last4": target.get("vehicle_last4"), "amount": amount})
-            continue
-        applied = _apply_member_amount(
-            db,
-            member,
-            amount,
-            target.get("charge_item") or member.charge_item or "협회비",
-            paid_date,
-            deposit,
-            f"{preset.get('title') or preset.get('code')} 묶음수납 반영",
-        )
-        applied_total += applied
-        applied_rows.append({"member_id": member.id, "name": member.name, "vehicle_no": member.vehicle_no, "amount": applied})
-
-    if not applied_rows:
-        raise HTTPException(status_code=400, detail="묶음수납 대상 회원을 찾지 못했습니다. 회원 원장/차량번호를 확인하세요.")
-
-    deposit.status = "매칭완료"
-    deposit.matched_member_id = applied_rows[0]["member_id"]
-    expected = sum(int(x.get("amount") or 0) for x in preset.get("targets", []))
-    deposit.hint = f"{preset.get('title') or preset.get('code')} 묶음수납 {applied_total:,}원 / 대상 {len(applied_rows)}명 / 차액 {int(deposit.amount or 0)-expected:,}원"
-    db.commit()
-    return {
-        "ok": True,
-        "deposit_id": deposit.id,
-        "group_code": preset.get("code"),
-        "group_title": preset.get("title"),
-        "applied": applied_total,
-        "applied_rows": applied_rows,
-        "unresolved": unresolved,
-        "diff": int(deposit.amount or 0) - expected,
-    }
 
 
 @router.post("/{deposit_id}/exclude")
