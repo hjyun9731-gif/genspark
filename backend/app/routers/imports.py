@@ -80,43 +80,6 @@ def _person_name(v: Any) -> str:
     return re.sub(r"\s+", "", _clean(v))
 
 
-def _name_candidates(v: Any) -> set[str]:
-    """회원명/미수금 성명 표기가 달라도 같은 사람을 찾기 위한 후보명 집합.
-
-    예) ㈜HRH김남진, ㈜HRH(대표:김남진), HRH(김남진) -> 김남진도 후보로 둔다.
-    회사명+대표자, 괄호, 대표: 표기가 섞인 미수금 파일 전체에 공통 적용한다.
-    """
-    raw = _person_name(v)
-    if not raw:
-        return set()
-    cands: set[str] = {raw}
-
-    # 괄호 안 대표자/이름은 보존해서 후보로 추가
-    for inner in re.findall(r"[\(（]([^\)）]+)[\)）]", raw):
-        inner2 = re.sub(r"^(대표자?|대표[:：]?)", "", inner)
-        inner2 = re.sub(r"[^0-9A-Za-z가-힣]", "", inner2)
-        if inner2:
-            cands.add(inner2)
-
-    norm = raw
-    norm = re.sub(r"[\(（]대표자?[:：]?([^\)）]+)[\)）]", r"\1", norm)
-    norm = re.sub(r"[\(（]([^\)）]+)[\)）]", r"\1", norm)
-    norm = re.sub(r"㈜|\(주\)|주식회사|유한회사|합자회사|대표자?|대표[:：]?", "", norm)
-    norm = re.sub(r"[^0-9A-Za-z가-힣]", "", norm)
-    if norm:
-        cands.add(norm)
-
-    # 영문/숫자 회사명 뒤에 붙은 한글 이름 추출: HRH김남진 -> 김남진
-    for run in re.findall(r"[가-힣]{2,5}", norm):
-        cands.add(run)
-    if re.search(r"[A-Za-z0-9]", norm):
-        m = re.search(r"([가-힣]{2,5})$", norm)
-        if m:
-            cands.add(m.group(1))
-
-    return {x for x in cands if x}
-
-
 def _clip(v: Any, n: int) -> str | None:
     s = _clean(v)
     return s[:n] if s else None
@@ -136,6 +99,26 @@ def _money(v: Any) -> int:
 def _has_value(v: Any) -> bool:
     s = _clean(v)
     return bool(s) and s not in {"-", "–", "—"}
+
+
+def _append_unique_note(existing: str | None, label: str, value: Any, max_len: int = 1800) -> str | None:
+    note = _clean(value)
+    if not note:
+        return existing
+    part = f"{label}:{note}"
+    current = _clean(existing)
+    # 같은 미수금 비고를 여러 번 업로드해도 계속 중복 추가하지 않는다.
+    if part in current:
+        return current[:max_len] if current else None
+    combined = f"{current} / {part}" if current else part
+    return combined[:max_len] if combined else None
+
+
+def _is_contact_problem_note(value: Any) -> bool:
+    t = _clean(value).replace(" ", "").lower()
+    if not t:
+        return False
+    return any(key in t for key in ["결번", "반송", "연락두절", "전화안됨", "주소불명", "문자발송x", "지로x,반송"])
 
 
 def _fix_reversed_future_date(d: date | None) -> date | None:
@@ -438,19 +421,11 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         "차량번호": idx("차량번호"), "성명": idx("성명", "성 명", "성     명"),
         "대수": idx("대수"), "이월금": idx("이월금"),
     }
-    # 월별 미수금 컬럼은 빈 헤더/병합셀 때문에 headers 리스트 인덱스로 잡으면 실제 열과 밀릴 수 있다.
-    # 따라서 실제 헤더 행의 엑셀 컬럼 번호를 직접 스캔한다.
     month_cols: dict[int, int] = {}
-    header_values = list(ws.iter_rows(min_row=header_row_no, max_row=header_row_no, max_col=80, values_only=True))[0]
-    for col_idx, h in enumerate(header_values):
-        label = _clean(h).replace(" ", "")
-        mm = re.search(r"(\d{1,2})월.*미수금", label)
+    for i, h in enumerate(headers):
+        mm = re.search(r"(\d{1,2})월\s*미수금", _clean(h).replace(" ", ""))
         if mm:
-            month_cols[int(mm.group(1))] = col_idx
-
-    # 2026년회비내역 실제 양식 기준: AE열 = 6월 미수금.
-    # 헤더가 병합/누락되어도 6월 현재잔액은 AE열을 우선 사용한다.
-    month_cols[6] = 30  # AE column, zero-based
+            month_cols[int(mm.group(1))] = i
 
     rows: list[dict[str, Any]] = []
     for row in ws.iter_rows(min_row=header_row_no + 1, max_col=80, values_only=True):
@@ -551,46 +526,27 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _member_match_maps(db: Session) -> tuple[dict[str, Member | None], dict[tuple[str, str], Member]]:
-    by_vehicle: dict[str, Member | None] = {}
+def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member]]:
+    by_vehicle: dict[str, Member] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
-    last4_seen: dict[str, Member | None] = {}
-
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
             by_vehicle[vn] = member
         last4 = _vehicle_last4(member.vehicle_no)
-        if last4:
-            # 미수금 파일 차량번호가 2107처럼 뒤4자리만 있는 경우가 많다.
-            # 뒤4자리가 유일한 경우만 직접 매칭하고, 중복이면 이름 후보로 다시 판별한다.
-            if last4 not in last4_seen:
-                last4_seen[last4] = member
-            else:
-                last4_seen[last4] = None
-            for nm in _name_candidates(member.name):
-                by_name_last4[(nm, last4)] = member
-
-    for last4, member in last4_seen.items():
-        by_vehicle[f"LAST4:{last4}"] = member
+        nm = _person_name(member.name)
+        if nm and last4:
+            by_name_last4[(nm, last4)] = member
     return by_vehicle, by_name_last4
 
 
-def _find_member_from_maps(by_vehicle: dict[str, Member | None], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
+def _find_member_from_maps(by_vehicle: dict[str, Member], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
     vn = _vehicle_norm(vehicle_no)
-    if vn and vn in by_vehicle and by_vehicle[vn] is not None:
+    if vn and vn in by_vehicle:
         return by_vehicle[vn]
-
-    last4 = _vehicle_last4(vehicle_no)
-    if last4:
-        for nm in _name_candidates(name):
-            member = by_name_last4.get((nm, last4))
-            if member:
-                return member
-        # 차량 뒤4자리가 유일하면 이름 표기가 달라도 매칭한다.
-        member = by_vehicle.get(f"LAST4:{last4}")
-        if member is not None:
-            return member
+    key = (_person_name(name), _vehicle_last4(vehicle_no))
+    if key[0] and key[1]:
+        return by_name_last4.get(key)
     return None
 
 
@@ -777,6 +733,14 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 if len(unmatched) < 80:
                     unmatched.append(f"미매칭: {row['성명']} / {row['차량번호']} / {row.get('현재 미수금액', 0):,}원")
                 continue
+
+            # 2026미수금 파일의 비고는 회원 원장의 비고와 별개로 반드시 회원 메모에 합쳐 저장한다.
+            # 통장매칭 후보/수동검색에서 이 메모를 보여주고, 메모 속 이름도 매칭 근거로 사용하기 위함.
+            arrears_note = _clean(row.get("비고"))
+            if arrears_note:
+                member.memo = _append_unique_note(member.memo, "미수금 비고", arrears_note)
+                if _is_contact_problem_note(arrears_note):
+                    member.is_disconnected = True
 
             # 재업로드 시 해당 회원의 기존 미수 상세를 현재잔액 1건으로 교체한다.
             db.execute(delete(ReceivableItem).where(ReceivableItem.member_id == member.id))
