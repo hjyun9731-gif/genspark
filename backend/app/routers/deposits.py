@@ -607,6 +607,25 @@ def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(
     return {"ok": True, **result}
 
 
+
+@router.post("/{deposit_id}/income")
+def match_deposit_income_only(deposit_id: int, payload: dict = Body(default={}), db: Session = Depends(get_db)):
+    deposit = db.get(Deposit, deposit_id)
+    if deposit is None:
+        raise HTTPException(status_code=404, detail="입금내역을 찾을 수 없습니다.")
+    if deposit.is_excluded:
+        raise HTTPException(status_code=400, detail="제외 처리된 입금건은 처리할 수 없습니다.")
+    if deposit.status in {"매칭완료", "반영완료"}:
+        raise HTTPException(status_code=400, detail="이미 처리된 입금건입니다.")
+    charge_item = (payload or {}).get("charge_item") or "기타"
+    if charge_item not in {"협회가입비", "자격증명발급비", "기타"}:
+        raise HTTPException(status_code=400, detail="가수금/잡수입/기타만 회원 없이 처리할 수 있습니다.")
+    deposit.status = "매칭완료"
+    deposit.matched_member_id = None
+    deposit.hint = f"회원 미지정 / {charge_item}({_accounting_type(charge_item)}) {int(deposit.amount or 0):,}원"
+    db.commit()
+    return {"ok": True, "deposit_id": deposit.id, "charge_item": charge_item, "accounting_type": _accounting_type(charge_item), "amount": int(deposit.amount or 0)}
+
 @router.post("/{deposit_id}/group-match")
 def match_deposit_group(deposit_id: int, payload: dict = Body(default={}), db: Session = Depends(get_db)):
     deposit = db.get(Deposit, deposit_id)

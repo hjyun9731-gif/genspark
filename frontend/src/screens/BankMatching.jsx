@@ -9,6 +9,20 @@ const INCOME_ACTIONS = [
   { value: '기타', label: '기타' },
 ]
 
+
+const INCOME_ONLY_ACTIONS = [
+  { value: '협회가입비', label: '가수금' },
+  { value: '자격증명발급비', label: '잡수입' },
+  { value: '기타', label: '기타' },
+]
+
+function IncomeOnlyButtons({deposit, onIncome}){
+  if(!deposit || ['매칭완료','반영완료','제외'].includes(getStatus(deposit))) return null
+  return <div className="income-only-actions">
+    {INCOME_ONLY_ACTIONS.map(a => <button key={a.value} className="btn mini income-soft" onClick={()=>onIncome(deposit.id, a.value)}>{a.label}</button>)}
+  </div>
+}
+
 const STATUS_TONE = {
   '자동매칭': 'green',
   '후보확인': 'orange',
@@ -68,7 +82,7 @@ function DepositDetail({deposit}){
   </tr>
 }
 
-function ManualMatchModal({deposit, members, onClose, onMatch, onGroupMatch}){
+function ManualMatchModal({deposit, members, onClose, onMatch, onGroupMatch, onIncome}){
   const [q,setQ]=useState('')
   const [serverRows,setServerRows]=useState([])
   const [loading,setLoading]=useState(false)
@@ -120,6 +134,14 @@ function ManualMatchModal({deposit, members, onClose, onMatch, onGroupMatch}){
         <div><b>입금액</b><strong>{formatWon(deposit.amount)}</strong></div>
         <div><b>거래일자</b><strong>{deposit.depositDate || '-'}</strong></div>
         <div><b>상태</b><strong><StatusBadge status={getStatus(deposit)}/></strong></div>
+      </div>
+
+      <div className="income-only-panel">
+        <div>
+          <b>회원 없이 처리</b>
+          <span>자격증명발급비·가입비·기타 입금은 미수금 차감 없이 통장내역만 완료처리합니다.</span>
+        </div>
+        <IncomeOnlyButtons deposit={deposit} onIncome={onIncome} />
       </div>
 
       {groupCandidates.length ? <>
@@ -302,6 +324,15 @@ export default function BankMatching({data, matchDeposit, matchDepositGroup, exc
     setModal(null)
   }
 
+  async function doIncomeOnly(depositId, chargeItem){
+    const label = chargeItem === '협회가입비' ? '가수금' : chargeItem === '자격증명발급비' ? '잡수입' : '기타수입'
+    if(!confirm(`이 입금건을 ${label}으로 처리할까요?
+회원 미수금은 차감하지 않고 통장내역만 완료 처리합니다.`)) return
+    await api.matchDepositIncome(depositId, {charge_item: chargeItem})
+    setModal(null)
+    await reloadFromDb?.()
+  }
+
   const handleAutoAll = async () => {
     const targets = rows.filter(d => getStatus(d) === '자동매칭' && getBestCandidate(d, members))
     if(!targets.length) return alert('자동매칭 대상이 없습니다.')
@@ -421,6 +452,7 @@ export default function BankMatching({data, matchDeposit, matchDepositGroup, exc
                     {!done && group && <button className="btn mini green" onClick={()=>doGroupMatch(d.id, group.code)}>묶음반영</button>}
                     {!done && !group && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id)}>반영</button>}
                     {!done && <button className="btn mini soft" onClick={()=>setModal(d)}>{best?'후보':'수동'}</button>}
+                    {!done && !best && !group && <IncomeOnlyButtons deposit={d} onIncome={doIncomeOnly} />}
                     {!done && <button className="btn mini" onClick={()=>excludeDeposit(d.id)}>제외</button>}
                     <button className="btn mini" onClick={()=>setOpenId(isOpen?null:d.id)}>{isOpen?'닫기':'원문'}</button>
                     {done && <span className="tiny muted">완료</span>}
@@ -441,7 +473,7 @@ export default function BankMatching({data, matchDeposit, matchDepositGroup, exc
         </div>
       </div>
     </Card>
-    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch} onGroupMatch={doGroupMatch}/>
+    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch} onGroupMatch={doGroupMatch} onIncome={doIncomeOnly}/>
     {showPaste && <PasteDepositModal onClose={()=>setShowPaste(false)} onSaved={reloadFromDb}/>}
   </div>
 }
