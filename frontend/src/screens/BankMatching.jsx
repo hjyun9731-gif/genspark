@@ -87,11 +87,33 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
   const [q,setQ]=useState('')
   const candidates = deposit?.candidates || []
   const memberRows = useMemo(()=>{
-    const base = (members || []).filter(m => m.status === '정상' && (Number(m.totalArrears)||0) > 0)
-    if(!q.trim()) return base.slice(0, 100)
+    // 수동검색은 전체 members만 보면 누락이 생긴다.
+    // 통장매칭 후보는 backend가 deposit.candidates / bestCandidate로만 내려주는 경우가 있어서
+    // 회원 검색 목록에 추천후보까지 합쳐서 보여준다.
+    const byId = new Map()
+    const add = (m) => {
+      if(!m || m.id === undefined || m.id === null) return
+      byId.set(String(m.id), { ...(byId.get(String(m.id)) || {}), ...m })
+    }
+    ;(members || []).forEach(add)
+    ;(deposit?.candidates || []).forEach(add)
+    add(deposit?.bestCandidate)
+    const base = Array.from(byId.values()).filter(m => {
+      const st = String(m.status || '정상')
+      return !['폐업','폐지','양도','이관','탈퇴','제외'].includes(st)
+    })
     const s = normalizeText(q)
-    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, memberMemo(m)].join('')).includes(s)).slice(0,100)
-  },[members,q])
+    const matched = !s ? base : base.filter(m => normalizeText([
+      m.name, m.memberName, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no,
+      m.phone, m.mobile, m.sigun, m.region, memberMemo(m),
+      deposit?.depositorName, deposit?.memo, deposit?.description
+    ].join(' ')).includes(s))
+    return matched.sort((a,b)=>{
+      const aa = Number(a.totalArrears || a.arrears_amount || 0)
+      const bb = Number(b.totalArrears || b.arrears_amount || 0)
+      return bb - aa
+    }).slice(0,100)
+  },[members,q,deposit])
   if(!deposit) return null
   return <div className="modal-bg">
     <div className="modal wide match-modal">

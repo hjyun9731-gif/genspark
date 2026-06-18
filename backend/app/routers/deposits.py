@@ -236,25 +236,15 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
 
 def _is_auto_candidate(c: Candidate, candidates: list[Candidate]) -> bool:
     reasons = set(c.reasons)
-
-    # 제일 중요한 규칙:
-    # 입금자/거래기록에 회원 이름 + 차량번호 뒤4자리가 같이 맞으면
-    # 금액이 달라도 자동매칭으로 본다.
-    # 예: "차유니8296" 입금 10,000원 / 현재미수 70,000원 => 자동매칭
-    if {"이름일치", "차량뒤4자리"} <= reasons:
-        same_clear = [
-            x for x in candidates
-            if {"이름일치", "차량뒤4자리"} <= set(x.reasons)
-        ]
-        # 이름+차량까지 같이 맞는 후보가 1명뿐이면 금액 불일치/부분납부여도 자동반영 가능
-        if len(same_clear) == 1 and same_clear[0].member.id == c.member.id:
-            return True
-
     if len(candidates) != 1:
-        return False
-    if "관리번호일치" in reasons:
+        # 이름+차량번호가 동시에 맞는 명확한 1순위는 자동 후보로 둔다.
+        if not ({"이름일치", "차량뒤4자리"} <= reasons and all(x.score < c.score for x in candidates[1:])):
+            return False
+    if {"이름일치", "차량뒤4자리"} <= reasons:
         return True
-    if {"이름일치", "금액일치"} <= reasons:
+    if "관리번호일치" in reasons and len(candidates) == 1:
+        return True
+    if {"이름일치", "금액일치"} <= reasons and len(candidates) == 1:
         return True
     return False
 

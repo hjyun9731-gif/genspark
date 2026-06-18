@@ -91,7 +91,7 @@ def _money(v: Any) -> int:
         return 0
     s = re.sub(r"[^0-9\-]", "", s)
     try:
-        return max(0, int(s or 0))
+        return int(s or 0)
     except Exception:
         return 0
 
@@ -779,7 +779,10 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             db.execute(delete(ReceivableItem).where(ReceivableItem.member_id == member.id))
             amt = _money(row.get("현재 미수금액") or row.get("미수금액"))
             ym = row.get("마지막 미수 기준월") or row.get("기준월") or "2026-현재"
-            if amt <= 0:
+            # 0원은 전체 회원 명단에서 totalArrears=0으로 자연스럽게 보이고,
+            # -5,000원 같은 선납/초과입금은 미수금명단에도 표시되어야 하므로
+            # 음수 현재잔액은 receivable item으로 저장한다.
+            if amt == 0:
                 skipped += 1
                 continue
             db.add(ReceivableItem(member_id=member.id, ym=ym, charge_item=member.charge_item, amount=amt, is_paid=False))
