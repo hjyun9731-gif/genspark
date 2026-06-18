@@ -88,6 +88,35 @@ def _text_for_match(deposit: Deposit) -> str:
     return _name_norm(f"{deposit.depositor_name or ''} {deposit.memo or ''}")
 
 
+def _memo_aliases(text: str | None) -> list[str]:
+    """회원 비고/메모에 적힌 별칭·입금자명을 통장매칭 후보에 사용한다.
+
+    예: "이체 정 홍 영", "오 영 숙", "김 혜 숙, 신 대 균", "공: 김강훈"처럼
+    메모에 저장된 이름이 입금자/거래기록에 보이면 후보로 올리고 화면에도 근거를 보여준다.
+    단, "이체", "전화" 같은 일반 단어만으로는 매칭하지 않는다.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+    blocked = {
+        "이체", "계좌", "계좌적기", "지로", "지로x", "전화", "문자", "결번",
+        "반송", "확인", "입금", "납부", "수납", "자동", "수동", "메모", "비고",
+        "15일이체", "cms", "자동이체", "신평", "주신평"
+    }
+    parts = re.split(r"[,/|;·\n\r]+", raw)
+    out: list[str] = []
+    for part in parts:
+        part = re.sub(r"^(공|입금자|입금|이체|대리|대표)\s*[:：-]?", "", part.strip(), flags=re.I)
+        # 띄어쓴 이름은 붙여서 비교하되, 표시용은 원문에 가깝게 보존한다.
+        norm = _name_norm(part)
+        norm = re.sub(r"[()\[\]{}:：'"`~!@#$%^&*_+=<>?\-]", "", norm)
+        if len(norm) < 2 or norm.lower() in blocked:
+            continue
+        if norm not in [_name_norm(x) for x in out]:
+            out.append(part.strip())
+    return out[:8]
+
+
 @dataclass
 class Candidate:
     member: Member
@@ -112,6 +141,8 @@ def _member_candidate_dict(c: Candidate) -> dict:
         "member_type": m.member_type,
         "status": m.status,
         "phone": m.phone,
+        "memo": m.memo,
+        "note": m.memo,
         "arrears_amount": c.arrears_amount,
         "totalArrears": c.arrears_amount,
         "diff": c.diff,
@@ -148,6 +179,7 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
         last4 = _vehicle_last4(member.vehicle_no)
         phone4 = _digits(member.phone)[-4:] if member.phone else ""
         mgmt = _name_norm(member.mgmt_no)
+        memo_aliases = _memo_aliases(member.memo)
 
         if nm and nm in text:
             score += 55
@@ -165,6 +197,14 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
             score += 70
             primary_match = True
             reasons.append("관리번호일치")
+
+        for alias in memo_aliases:
+            alias_norm = _name_norm(alias)
+            if alias_norm and (alias_norm in text or text in alias_norm):
+                score += 62
+                primary_match = True
+                reasons.append(f"비고/메모일치:{alias}")
+                break
 
         # 금액은 보조 점수다. 금액만 맞는 회원은 후보 제외.
         if amount == arrears:

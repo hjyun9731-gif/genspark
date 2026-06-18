@@ -29,6 +29,10 @@ function getBestCandidate(d, members){
   return d.bestCandidate || (d.candidateId ? members.find(m => m.id === d.candidateId) : null)
 }
 
+function memberMemo(m){
+  return m?.memo || m?.note || m?.remark || m?.remarks || ''
+}
+
 function normalizeText(v){
   return String(v || '').replace(/\s+/g, '').toLowerCase()
 }
@@ -47,6 +51,7 @@ function DepositDetail({deposit}){
         <div><b>거래내용</b><span>{deposit.description || deposit.transactionType || '-'}</span></div>
         <div><b>원본구분</b><span>{deposit.sourceType || deposit.source || '-'}</span></div>
         <div><b>입금자/기록</b><span>{deposit.depositorName || deposit.rawName || '-'}</span></div>
+        <div><b>매칭메모</b><span>{deposit.hint || '-'}</span></div>
       </div>
     </td>
   </tr>
@@ -59,7 +64,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
     const base = (members || []).filter(m => m.status === '정상' && (Number(m.totalArrears)||0) > 0)
     if(!q.trim()) return base.slice(0, 100)
     const s = normalizeText(q)
-    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone].join('')).includes(s)).slice(0,100)
+    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, memberMemo(m)].join('')).includes(s)).slice(0,100)
   },[members,q])
   if(!deposit) return null
   return <div className="modal-bg">
@@ -82,11 +87,12 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
       {candidates.length ? <>
         <div className="section-title compact-title">추천 후보</div>
         <div className="admin-table-wrap modal-table-scroll">
-          <table className="admin-table dense"><thead><tr><th>회원</th><th>차량번호</th><th>관리번호</th><th>매칭근거</th><th className="right">현재미수</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
+          <table className="admin-table dense"><thead><tr><th>회원</th><th>차량번호</th><th>관리번호</th><th>비고/메모</th><th>매칭근거</th><th className="right">현재미수</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
             {candidates.map(c=><tr key={c.id}>
               <td><b>{c.name}</b></td>
               <td>{c.vehicleNo || c.vehicle_no || '-'}</td>
               <td>{c.mgmtNo || c.mgmt_no || '-'}</td>
+              <td className="muted-cell memo-cell">{shortText(memberMemo(c) || '-', 40)}</td>
               <td className="muted-cell">{shortText(c.reason || c.reasons?.join(' · ') || '-', 52)}</td>
               <td className="right money">{formatWon(c.totalArrears || c.arrears_amount)}</td>
               <td className="right">{diffText(c.diff)}</td>
@@ -99,17 +105,18 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
       <div className="section-title compact-title">회원 검색</div>
       <input className="input full" value={q} onChange={e=>setQ(e.target.value)} placeholder="이름 / 차량번호 / 관리번호 / 전화번호 검색" />
       <div className="admin-table-wrap modal-table-scroll mt8">
-        <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
+        <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th>비고/메모</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
           {memberRows.map(m=><tr key={m.id}>
             <td><b>{m.name}</b></td>
             <td>{m.sigun || '-'}</td>
             <td>{m.vehicleNo || m.vehicle_no || '-'}</td>
             <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
             <td>{m.membership || '-'}</td>
+            <td className="muted-cell memo-cell">{shortText(memberMemo(m) || '-', 34)}</td>
             <td className="right money">{formatWon(m.totalArrears)}</td>
             <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id)}>선택</button></td>
           </tr>)}
-          {!memberRows.length && <tr><td colSpan={7} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
+          {!memberRows.length && <tr><td colSpan={8} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
         </tbody></table>
       </div>
     </div>
@@ -217,7 +224,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const rows=useMemo(()=>{
     return deposits.filter(d=>{
       const best = getBestCandidate(d, members)
-      const text=normalizeText([d.depositorName,d.memo,d.description,d.status,d.matchStatus,best?.name,best?.vehicleNo,best?.vehicle_no,best?.mgmtNo,best?.mgmt_no].join(' '))
+      const text=normalizeText([d.depositorName,d.memo,d.description,d.status,d.matchStatus,best?.name,best?.vehicleNo,best?.vehicle_no,best?.mgmtNo,best?.mgmt_no,memberMemo(best),d.hint].join(' '))
       const okQ=!q.trim() || text.includes(normalizeText(q))
       const st=getStatus(d)
       const okS=status==='전체' || st===status || (status==='처리대기' && !['매칭완료','제외'].includes(st)) || (status==='확인필요' && ['후보확인','중복후보'].includes(st))
@@ -347,7 +354,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="clip-cell" title={d.memo || d.description || ''}>{shortText(d.memo || d.description || '-', 46)}</td>
                   <td className="right money nowrap">{formatWon(amount)}</td>
                   <td><StatusBadge status={st}/>{d.candidateCount>1 && <div className="tiny muted">후보 {d.candidateCount}명</div>}</td>
-                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div></td>
+                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{best && memberMemo(best) && <div className="tiny memo-line">비고: {shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
                   <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
                   <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">
