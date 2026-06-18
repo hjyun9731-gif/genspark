@@ -423,7 +423,10 @@ def _arrears_header(ws) -> tuple[int, list[str], dict[str, int]]:
                 continue
             h = re.sub(r"\s+", " ", h.replace("\n", " ")).strip()
             headers.append(h)
-            mapping[_norm_col(h)] = i - 1
+            # 같은 제목(특히 비고)이 여러 번 있을 수 있다.
+            # 미수금 파일의 입금자 별칭 비고는 앞쪽(계정 다음, 차량번호 앞) 비고이므로
+            # 뒤쪽 중복 비고가 앞쪽 비고를 덮어쓰지 않게 첫 번째 위치를 유지한다.
+            mapping.setdefault(_norm_col(h), i - 1)
         if "차량번호" in mapping and ("성명" in mapping or "성명" in [_norm_col(x) for x in headers]):
             return row_no, headers, mapping
         score = sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in mapping)
