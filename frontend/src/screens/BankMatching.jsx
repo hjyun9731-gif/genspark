@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, PageHead, Badge, formatWon } from '../components.jsx'
 import { api } from '../api.js'
 
@@ -85,35 +85,92 @@ function DepositDetail({deposit}){
 
 function ManualMatchModal({deposit, members, onClose, onMatch}){
   const [q,setQ]=useState('')
+  const [remoteRows, setRemoteRows] = useState([])
+  const [searching, setSearching] = useState(false)
   const candidates = deposit?.candidates || []
-  const memberRows = useMemo(()=>{
-    // 수동검색은 전체 members만 보면 누락이 생긴다.
-    // 통장매칭 후보는 backend가 deposit.candidates / bestCandidate로만 내려주는 경우가 있어서
-    // 회원 검색 목록에 추천후보까지 합쳐서 보여준다.
-    const byId = new Map()
-    const add = (m) => {
-      if(!m || m.id === undefined || m.id === null) return
-      byId.set(String(m.id), { ...(byId.get(String(m.id)) || {}), ...m })
+
+  // 핵심 수정:
+  // 기존 수동검색은 화면에 이미 로딩된 members 배열만 뒤져서 누락이 생겼다.
+  // 특히 현재 입금자(예: 우양재) 창에서는 candidate 목록이 차량뒤4자리 후보로 채워지고,
+  // 전체 members가 일부만 로딩되어 있으면 본인 검색 결과가 안 나왔다.
+  // 검색어가 입력되면 서버 /api/members?q= 로 직접 조회해 정확한 회원을 가져온다.
+  useEffect(() => {
+    const keyword = String(q || '').trim()
+    if(!keyword){
+      setRemoteRows([])
+      setSearching(false)
+      return
     }
-    ;(members || []).forEach(add)
-    ;(deposit?.candidates || []).forEach(add)
-    add(deposit?.bestCandidate)
+    let alive = true
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try{
+        const rows = await api.listMembers({ q: keyword, status: '정상', size: 200 })
+        if(alive) setRemoteRows(Array.isArray(rows) ? rows : [])
+      }catch(e){
+        if(alive) setRemoteRows([])
+      }finally{
+        if(alive) setSearching(false)
+      }
+    }, 180)
+    return () => { alive = false; clearTimeout(t) }
+  }, [q])
+
+  const memberRows = useMemo(()=>{
+    const byId = new Map()
+    const add = (m, source='') => {
+      if(!m || m.id === undefined || m.id === null) return
+      const key = String(m.id)
+      byId.set(key, { ...(byId.get(key) || {}), ...m, _source: source || byId.get(key)?._source || '' })
+    }
+
+    // 검색 결과는 최우선으로 넣는다. 그래야 우양재 검색 시 우양재가 반드시 보인다.
+    ;(remoteRows || []).forEach(m => add(m, 'server'))
+    ;(deposit?.candidates || []).forEach(m => add(m, 'candidate'))
+    add(deposit?.bestCandidate, 'best')
+    ;(members || []).forEach(m => add(m, 'local'))
+
     const base = Array.from(byId.values()).filter(m => {
       const st = String(m.status || '정상')
       return !['폐업','폐지','양도','이관','탈퇴','제외'].includes(st)
     })
     const s = normalizeText(q)
-    const matched = !s ? base : base.filter(m => normalizeText([
+    const memberSearchText = (m) => normalizeText([
       m.name, m.memberName, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no,
-      m.phone, m.mobile, m.sigun, m.region, memberMemo(m),
-      deposit?.depositorName, deposit?.memo, deposit?.description
-    ].join(' ')).includes(s))
+      m.phone, m.mobile, m.sigun, m.region, memberMemo(m)
+    ].join(' '))
+    const matched = !s ? base : base.filter(m => memberSearchText(m).includes(s))
+    const score = (m) => {
+      if(!s) return 0
+      const name = normalizeText(m.name || m.memberName || '')
+      const vehicle = normalizeText(m.vehicleNo || m.vehicle_no || '')
+      const mgmt = normalizeText(m.mgmtNo || m.mgmt_no || '')
+      const phone = normalizeText(m.phone || m.mobile || '')
+      const memo = normalizeText(memberMemo(m))
+      let sc = 0
+      if(name === s) sc += 10000
+      else if(name.startsWith(s)) sc += 9000
+      else if(name.includes(s)) sc += 8000
+      if(vehicle.includes(s)) sc += 7000
+      if(mgmt.includes(s)) sc += 6000
+      if(phone.includes(s)) sc += 5000
+      if(memo.includes(s)) sc += 4000
+      if(m._source === 'server') sc += 300
+      if(m._source === 'candidate' || m._source === 'best') sc += 150
+      return sc
+    }
     return matched.sort((a,b)=>{
+      const sa = score(a)
+      const sb = score(b)
+      if(sb !== sa) return sb - sa
+      const an = String(a.name || a.memberName || '')
+      const bn = String(b.name || b.memberName || '')
+      if(an !== bn) return an.localeCompare(bn, 'ko')
       const aa = Number(a.totalArrears || a.arrears_amount || 0)
       const bb = Number(b.totalArrears || b.arrears_amount || 0)
       return bb - aa
     }).slice(0,100)
-  },[members,q,deposit])
+  },[members,q,deposit,remoteRows])
   if(!deposit) return null
   return <div className="modal-bg">
     <div className="modal wide match-modal">
@@ -152,16 +209,19 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
 
       <div className="section-title compact-title">회원 검색</div>
       <input className="input full" value={q} onChange={e=>setQ(e.target.value)} placeholder="이름 / 차량번호 / 관리번호 / 전화번호 검색" />
+      <div className="muted tiny mt6">
+        {q ? (searching ? '회원 DB 검색 중…' : `검색 결과 ${memberRows.length}명`) : '검색어를 입력하면 회원 DB에서 다시 찾습니다.'}
+      </div>
       <div className="admin-table-wrap modal-table-scroll mt8">
         <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th>비고/메모</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
           {memberRows.map(m=><tr key={m.id}>
-            <td><b>{m.name}</b></td>
+            <td><b>{m.name || m.memberName}</b></td>
             <td>{m.sigun || '-'}</td>
             <td>{m.vehicleNo || m.vehicle_no || '-'}</td>
             <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
             <td>{m.membership || '-'}</td>
             <td className="muted-cell memo-cell">{shortText(memberMemo(m) || '-', 34)}</td>
-            <td className="right money">{formatWon(m.totalArrears)}</td>
+            <td className="right money">{formatWon(m.totalArrears ?? m.arrears_amount ?? 0)}</td>
             <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id)}>선택</button></td>
           </tr>)}
           {!memberRows.length && <tr><td colSpan={8} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
