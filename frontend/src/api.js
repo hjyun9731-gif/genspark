@@ -43,6 +43,7 @@ export const api = {
   listPayments: (params = {}) => http(`/payments${qs(params)}`),
   updatePayment: (id, body) => http(`/payments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   cancelPayment: (id) => http(`/payments/${id}/cancel`, { method: 'POST' }),
+  resetAllPayments: () => http('/payments/reset-all', { method: 'POST' }),
   dashboardSummary: () => http('/dashboard/summary'),
   dashboardBySigun: () => http('/dashboard/by-sigun'),
   importPreview: (fileType, file) => {

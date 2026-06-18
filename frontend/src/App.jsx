@@ -11,32 +11,6 @@ import PendingBoard from './screens/PendingBoard.jsx'
 import ExcelImport from './screens/ExcelImport.jsx'
 
 
-const VIEW_HASH = {
-  dashboard: '#dashboard',
-  list: '#receivables',
-  bank: '#bank',
-  closure: '#closure',
-  payments: '#payments',
-  pending: '#pending',
-  import: '#import',
-}
-
-const HASH_VIEW = {
-  '#dashboard': 'dashboard',
-  '#receivables': 'list',
-  '#list': 'list',
-  '#bank': 'bank',
-  '#closure': 'closure',
-  '#payments': 'payments',
-  '#pending': 'pending',
-  '#import': 'import',
-}
-
-function getInitialView(){
-  const hash = (window.location.hash || '').toLowerCase()
-  return HASH_VIEW[hash] || 'dashboard'
-}
-
 const NAV = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'list', label: '미수금명단' },
@@ -47,8 +21,32 @@ const NAV = [
   { key: 'import', label: '엑셀 업로드' },
 ]
 
+const HASH_TO_VIEW = {
+  dashboard: 'dashboard',
+  receivables: 'list',
+  list: 'list',
+  bank: 'bank',
+  closure: 'closure',
+  payments: 'payments',
+  pending: 'pending',
+  import: 'import',
+}
+const VIEW_TO_HASH = {
+  dashboard: 'dashboard',
+  list: 'receivables',
+  bank: 'bank',
+  closure: 'closure',
+  payments: 'payments',
+  pending: 'pending',
+  import: 'import',
+}
+function viewFromHash(){
+  const raw = String(window.location.hash || '').replace(/^#/, '')
+  return HASH_TO_VIEW[raw] || 'dashboard'
+}
+
 export default function App() {
-  const [view, setView] = useState(() => getInitialView())
+  const [view, setView] = useState(() => viewFromHash())
   const [health, setHealth] = useState('확인 중…')
   const [preset, setPreset] = useState(null)
   const [data, setData] = useState(() => buildInitialData())
@@ -88,6 +86,12 @@ export default function App() {
     api.health().then((d) => { setHealth(`연결됨 (${d.app})`); reloadFromDb() }).catch(() => setHealth('백엔드 미연결 · 데이터 표시 불가'))
   }, [])
 
+  useEffect(() => {
+    const onHashChange = () => setView(viewFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
   const summary = useMemo(() => {
     const active = data.members.filter(m => m.status === '정상')
     const arrearsMembers = active.filter(m => m.totalArrears > 0)
@@ -112,20 +116,9 @@ export default function App() {
   function navigate(nextView, nextPreset=null){
     setView(nextView)
     setPreset(nextPreset)
-    const nextHash = VIEW_HASH[nextView] || '#dashboard'
-    if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, '', nextHash)
-    }
+    const nextHash = VIEW_TO_HASH[nextView] || 'dashboard'
+    if (window.location.hash !== `#${nextHash}`) window.location.hash = nextHash
   }
-
-  useEffect(() => {
-    const onHashChange = () => {
-      const next = HASH_VIEW[(window.location.hash || '').toLowerCase()] || 'dashboard'
-      setView(next)
-    }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
 
   async function saveMemo(memberId, memo){
     try{ await api.updateMember(memberId,{memo}); await reloadFromDb() }
@@ -164,6 +157,10 @@ export default function App() {
     try{ await api.cancelPayment(paymentId); await reloadFromDb() }
     catch(e){ alert(e.message || '수납 취소 실패') }
   }
+  async function resetAllPayments(){
+    try{ await api.resetAllPayments(); await reloadFromDb() }
+    catch(e){ alert(e.message || '수납내역 전체 초기화 실패') }
+  }
   async function updatePayment(paymentId, payload){
     try{ await api.updatePayment(paymentId, payload); await reloadFromDb() }
     catch(e){ alert(e.message || '수납 수정 실패') }
@@ -199,7 +196,7 @@ export default function App() {
     catch(e){ alert(e.message || '전체자명단 전환 실패') }
   }
 
-  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, matchDeposit, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
+  const screenProps = {data, summary, navigate, preset, setPreset, saveMemo, updateMember, applyPayment, registerClosure, updateClosure, restoreClosure, deleteClosure, updatePayment, cancelPayment, resetAllPayments, matchDeposit, excludeDeposit, resetPendingDeposits, addPending, updatePending, deletePending, promotePending, reloadFromDb}
   const Screen = {dashboard:Dashboard,list:ReceivablesList,bank:BankMatching,closure:ClosureBoard,payments:PaymentsHistory,pending:PendingBoard,import:ExcelImport}[view] || Dashboard
 
   return <div className="app top-app">

@@ -4,15 +4,6 @@ import { SIGUN, getOpenArrears } from '../data.js'
 
 const PER_PAGE = 50
 
-function useDebouncedValue(value, delay = 300){
-  const [debounced, setDebounced] = React.useState(value)
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delay)
-    return () => window.clearTimeout(timer)
-  }, [value, delay])
-  return debounced
-}
-
 function memoParts(member){
   return String(member.memo || '').split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean)
 }
@@ -75,6 +66,32 @@ function last4(value){
   const m = normText(value).match(/(\d{4})(?!.*\d)/)
   return m ? m[1] : ''
 }
+
+function contactProblem(member){
+  const text = [
+    member.phone, member.memo, member.regionRaw, member.region_raw,
+    addressOf(member), officialAddressOf(member), noteOf(member)
+  ].join(' ')
+  return Boolean(
+    member.disconnected || member.is_disconnected ||
+    /결번|반송|연락두절|전화안됨|번호없|없는번호|수취인불명|폐문부재|주소불명/i.test(text)
+  )
+}
+function vehicleTail(value){
+  return last4(value) || String(value || '').replace(/\D/g, '').slice(-4)
+}
+function issueMonthLabel(member){
+  const ym = basisYm(member)
+  const m = String(ym || '').match(/^(\d{4})-(\d{2})$/)
+  if (m) return `${Number(m[2])}월분`
+  const today = new Date()
+  return `${today.getMonth() + 1}월분`
+}
+function todayDot(){
+  const d = new Date()
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+}
+
 function paymentMatchesMember(payment, member){
   const memberId = String(member.id ?? '')
   const paymentMemberId = String(payment.memberId ?? payment.member_id ?? '')
@@ -111,6 +128,11 @@ function memberPayments(data, member){
 function paymentSearchText(payment){
   return [payment.name, payment.vehicleNo, payment.vehicle_no, payment.mgmtNo, payment.mgmt_no, payment.method, payment.paidForYm, payment.paid_for_ym, payment.chargeItem, payment.charge_item, payment.memo].join(' ').toLowerCase()
 }
+function recentPaymentText(payments){
+  if (!payments.length) return '-'
+  const p = payments[0]
+  return `${p.paidDate || (p.createdAt || '').slice(0,10) || '-'} · ${formatWon(p.amount)} · ${p.method || '-'}`
+}
 function makeMemoFromFields(fields){
   const parts = []
   if(fields.address) parts.push(`주소:${fields.address}`)
@@ -137,7 +159,6 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const [editMember, setEditMember] = useState(null)
   const [paymentMember, setPaymentMember] = useState(null)
   const [highlightMemberId, setHighlightMemberId] = useState(preset?.memberId || null)
-  const debouncedQ = useDebouncedValue(q, 300)
 
   React.useEffect(() => {
     if (!preset) return
@@ -165,18 +186,9 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     return counts
   }, [data.members])
 
-  const paymentsByMember = useMemo(() => {
-    const map = new Map()
-    for (const member of data.members || []) {
-      map.set(String(member.id), memberPayments(data, member))
-    }
-    return map
-  }, [data.members, data.payments])
-
   const rows = useMemo(() => {
     let arr = [...data.members]
-    const keywordRaw = debouncedQ.trim()
-    const hasSearch = keywordRaw.length > 0
+    const hasSearch = q.trim().length > 0
     if (status !== '전체') arr = arr.filter(member => member.status === status)
     // 미수금명단은 이름과 달리 '미수자만'이 아니라 협회 관리 대상 전체 명단이다.
     // 0원 완납자, 선입금/초과입금(-금액) 회원도 빠지면 안 된다.
@@ -188,16 +200,16 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     if (membership !== '전체') arr = arr.filter(member => member.membership === membership)
     if (account !== '전체') arr = arr.filter(member => member.chargeItem === account)
     if (special === '장기') arr = arr.filter(member => arrearsMonthCount(member) >= 12)
-    if (special === '결번') arr = arr.filter(member => member.disconnected)
+    if (special === '결번') arr = arr.filter(member => contactProblem(member))
     if (special === '자격') arr = arr.filter(member => member.certMissing)
-    if (keywordRaw) {
-      const keyword = keywordRaw.toLowerCase()
+    if (q.trim()) {
+      const keyword = q.trim().toLowerCase()
       arr = arr.filter(member => {
         const memberHit = [
           member.name, member.vehicleNo, member.mgmtNo, member.phone, member.sigun, member.regionRaw,
           member.memo, addressOf(member), bizNoOf(member), officialAddressOf(member), member.chargeItem,
         ].join(' ').toLowerCase().includes(keyword)
-        const paymentHit = (paymentsByMember.get(String(member.id)) || []).some(payment => paymentSearchText(payment).includes(keyword))
+        const paymentHit = memberPayments(data, member).some(payment => paymentSearchText(payment).includes(keyword))
         return memberHit || paymentHit
       })
     }
@@ -228,7 +240,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [data.members, debouncedQ, sigun, membership, account, amount, status, special, sortKey, sortDir, highlightMemberId, paymentsByMember])
+  }, [data.members, data.payments, q, sigun, membership, account, amount, status, special, sortKey, sortDir, highlightMemberId])
 
   const totalArrears = rows.reduce((sum, member) => sum + (Number(member.totalArrears) || 0), 0)
   const over300k = rows.filter(member => Number(member.totalArrears) >= 300000).length
@@ -236,7 +248,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
   const pageCount = Math.max(1, Math.ceil(rows.length / PER_PAGE))
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  function paymentsFor(member){ return paymentsByMember.get(String(member.id)) || [] }
+  function paymentsFor(member){ return memberPayments(data, member) }
 
   function resetFilters(){
     setQ('')
@@ -269,10 +281,41 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
     link.click()
   }
 
+
+  function exportAltoran(){
+    const head = ['거래처 코드','차량번호\n(상호)','성함\n(대표자)','기타사원','핸드폰','거래처구분(S고정)','품목 코드','지로발행명목\n(회비, 관리비 등)','규격\n(월분)','발행연월일','실제금액']
+    const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const money = (v) => Number(v || 0)
+    const bodyRows = rows.map((member, idx) => [
+      String(idx + 1).padStart(6, '0'),
+      vehicleTail(member.vehicleNo || member.vehicle_no),
+      member.name || '',
+      member.chargeItem || member.charge_item || '',
+      member.phone || '',
+      'S',
+      '00005',
+      member.chargeItem || member.charge_item || '',
+      issueMonthLabel(member),
+      todayDot(),
+      money(member.totalArrears),
+    ])
+    const tableRows = [head, ...bodyRows].map((row, rIdx) => '<tr>' + row.map((cell, cIdx) => {
+      const isMoney = rIdx > 0 && cIdx === 10
+      const style = rIdx === 0 ? 'font-weight:bold;background:#eef2ff;text-align:center;border:1px solid #cbd5e1;' : 'border:1px solid #dbe3ef;'
+      const extra = isMoney ? ' style="mso-number-format:\\#\\,\\#\\#0;border:1px solid #dbe3ef;text-align:right;"' : ` style="${style}"`
+      return `<td${extra}>${esc(cell)}</td>`
+    }).join('') + '</tr>').join('')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>td{font-family:Malgun Gothic,Arial;font-size:11pt;padding:5px;white-space:nowrap}.text{mso-number-format:"\\@"}</style></head><body><table>${tableRows}</table></body></html>`
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' }))
+    link.download = `알토란_문자양식_${todayDot().replaceAll('.', '')}.xls`
+    link.click()
+  }
+
   return <div className="screen-shell admin-screen receivables-screen">
     <PageHead title="미수금명단" desc="지역별 미수자를 한 화면에서 확인하고 바로 처리합니다.">
       <button type="button" className="btn mini reset-btn" onClick={resetFilters}>초기화</button>
-      <button type="button" className="btn soft mini" onClick={exportCSV}>엑셀 다운로드</button>
+      <button type="button" className="btn soft mini" onClick={exportCSV}>엑셀 다운로드</button><button type="button" className="btn primary mini" onClick={exportAltoran}>알토란 양식 추출</button>
     </PageHead>
 
     <div className="summary-strip four">
@@ -318,7 +361,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
       </div>
       <div className="mini-chip-row">
         <button type="button" className={'chip ' + (special === '장기' ? 'active' : '')} onClick={() => { setSpecial(special === '장기' ? '' : '장기'); setPage(1) }}>12개월 이상</button>
-        <button type="button" className={'chip ' + (special === '결번' ? 'active' : '')} onClick={() => { setSpecial(special === '결번' ? '' : '결번'); setPage(1) }}>결번/반송</button>
+        <button type="button" className={'chip ' + (special === '결번' ? 'active' : '')} onClick={() => { const next = special === '결번' ? '' : '결번'; setSpecial(next); if(next){ setStatus('전체'); setAmount('전체') } setPage(1) }}>결번/반송</button>
         <button type="button" className={'chip ' + (special === '자격' ? 'active' : '')} onClick={() => { setSpecial(special === '자격' ? '' : '자격'); setPage(1) }}>자격증명 미발급</button>
       </div>
     </Card>
@@ -345,7 +388,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
               <td className="mono nowrap">{basisYm(member)}</td>
               <td className="mono nowrap"><b>{arrearsMonthCount(member)}</b>개월</td>
               <td className="right money money-main">{formatWon(member.totalArrears)}</td>
-              <td className="mono nowrap" style={{ color: member.disconnected ? 'var(--rose)' : undefined }}>{member.phone || '-'}</td>
+              <td className="mono nowrap" style={{ color: contactProblem(member) ? 'var(--rose)' : undefined }}>{member.phone || '-'}</td>
               <td className="clip-cell" title={addressOf(member)}>{addressOf(member)}</td>
               <td>{Number(member.totalArrears) < 0 ? <Badge tone="purple">선납</Badge> : Number(member.totalArrears) === 0 ? <Badge tone="mint">완납/0원</Badge> : <Badge tone={member.status === '정상' ? 'soft' : 'rose'}>{member.status || '-'}</Badge>}</td>
               <td className="right action-cell sticky-action-cell">
@@ -355,7 +398,7 @@ export default function ReceivablesList({ data, preset, setPreset, saveMemo, upd
                 <button type="button" className="btn mini action-close" onClick={() => setQuickClose(member)}>폐업</button>
               </td>
             </tr>)}
-            {!pageRows.length && <tr><td colSpan="13" className="empty-cell compact">조건에 맞는 회원이 없습니다.</td></tr>}
+            {!pageRows.length && <tr><td colSpan="12" className="empty-cell compact">조건에 맞는 회원이 없습니다.</td></tr>}
           </tbody>
         </table>
       </div>
