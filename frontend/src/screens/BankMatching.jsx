@@ -2,30 +2,6 @@ import React, { useMemo, useState } from 'react'
 import { Card, PageHead, Badge, formatWon } from '../components.jsx'
 import { api } from '../api.js'
 
-
-const INCOME_ITEMS = [
-  { value: '협회비', label: '협회비', accounting: '회비수입', tone: 'lavender' },
-  { value: '관리비', label: '관리비', accounting: '회비수입', tone: 'sky' },
-  { value: '협회가입비', label: '협회가입비', accounting: '가수금', tone: 'pink' },
-  { value: '자격증명발급비', label: '자격증명발급비', accounting: '잡수입', tone: 'yellow' },
-  { value: '기타', label: '기타', accounting: '기타수입', tone: 'green' },
-]
-
-function accountingType(item){
-  return INCOME_ITEMS.find(x => x.value === item)?.accounting || '회비수입'
-}
-
-function inferChargeItem(member, deposit){
-  const text = normalizeText([deposit?.depositorName, deposit?.memo, deposit?.description].join(' '))
-  if(text.includes('가입비') || text.includes('협회가입') || text.includes('신규가입')) return '협회가입비'
-  if(text.includes('자격증명') || text.includes('발급비') || text.includes('재발급')) return '자격증명발급비'
-  return member?.chargeItem || member?.charge_item || '관리비'
-}
-
-function itemTone(item){
-  return INCOME_ITEMS.find(x => x.value === item)?.tone || 'soft'
-}
-
 const STATUS_TONE = {
   '자동매칭': 'green',
   '후보확인': 'orange',
@@ -78,10 +54,9 @@ function DepositDetail({deposit}){
 
 function ManualMatchModal({deposit, members, onClose, onMatch}){
   const [q,setQ]=useState('')
-  const [chargeItem,setChargeItem]=useState(()=>inferChargeItem(deposit?.bestCandidate, deposit))
   const candidates = deposit?.candidates || []
   const memberRows = useMemo(()=>{
-    const base = (members || []).filter(m => m.status === '정상')
+    const base = (members || []).filter(m => m.status === '정상' && (Number(m.totalArrears)||0) > 0)
     if(!q.trim()) return base.slice(0, 100)
     const s = normalizeText(q)
     return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone].join('')).includes(s)).slice(0,100)
@@ -103,16 +78,6 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
         <div><b>거래일자</b><strong>{deposit.depositDate || '-'}</strong></div>
         <div><b>상태</b><strong><StatusBadge status={getStatus(deposit)}/></strong></div>
       </div>
-      <div className="income-select-panel">
-        <div>
-          <b>수납항목</b>
-          <p>협회가입비/자격증명발급비는 미수금 차감 없이 수납내역에만 기록됩니다.</p>
-        </div>
-        <select className="select" value={chargeItem} onChange={e=>setChargeItem(e.target.value)}>
-          {INCOME_ITEMS.map(item => <option key={item.value} value={item.value}>{item.label} · {item.accounting}</option>)}
-        </select>
-        <Badge tone={itemTone(chargeItem)}>{accountingType(chargeItem)}</Badge>
-      </div>
 
       {candidates.length ? <>
         <div className="section-title compact-title">추천 후보</div>
@@ -125,7 +90,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
               <td className="muted-cell">{shortText(c.reason || c.reasons?.join(' · ') || '-', 52)}</td>
               <td className="right money">{formatWon(c.totalArrears || c.arrears_amount)}</td>
               <td className="right">{diffText(c.diff)}</td>
-              <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, c.id, chargeItem)}>반영</button></td>
+              <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, c.id)}>반영</button></td>
             </tr>)}
           </tbody></table>
         </div>
@@ -142,7 +107,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
             <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
             <td>{m.membership || '-'}</td>
             <td className="right money">{formatWon(m.totalArrears)}</td>
-            <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id, chargeItem)}>선택</button></td>
+            <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id)}>선택</button></td>
           </tr>)}
           {!memberRows.length && <tr><td colSpan={7} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
         </tbody></table>
@@ -232,6 +197,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const [openId,setOpenId]=useState(null)
   const [page,setPage]=useState(1)
   const pageSize = 50
+  const [autoApplying,setAutoApplying]=useState(false)
 
   const deposits = data.deposits || []
   const members = data.members || []
@@ -265,8 +231,8 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const pageRows = rows.slice((page-1)*pageSize, page*pageSize)
 
-  async function doMatch(depositId, memberId, chargeItem=null){
-    await matchDeposit(depositId, memberId, chargeItem)
+  async function doMatch(depositId, memberId){
+    await matchDeposit(depositId, memberId)
     setModal(null)
   }
 
@@ -274,9 +240,29 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
     const targets = rows.filter(d => getStatus(d) === '자동매칭' && getBestCandidate(d, members))
     if(!targets.length) return alert('자동매칭 대상이 없습니다.')
     if(!confirm(`자동매칭 ${targets.length}건을 수납 반영할까요?\n반영 전 후보가 맞는지 확인하세요.`)) return
-    for(const d of targets){
-      const best = getBestCandidate(d, members)
-      await matchDeposit(d.id, best.id, inferChargeItem(best, d))
+    setAutoApplying(true)
+    try{
+      // 여러 건을 브라우저에서 1건씩 연속 호출하면 화면이 멈추거나 빈 화면처럼 보일 수 있어
+      // 서버 일괄 반영 API를 우선 사용하고, 없으면 기존 개별 반영으로 fallback 한다.
+      if(api.autoMatchAllDeposits){
+        const res = await api.autoMatchAllDeposits()
+        await reloadFromDb?.()
+        alert(`자동매칭 반영 완료: ${res.matched || 0}건${res.skipped ? ` / 제외 ${res.skipped}건` : ''}`)
+      }else{
+        let ok = 0
+        for(const d of targets){
+          const best = getBestCandidate(d, members)
+          if(!best) continue
+          await matchDeposit(d.id, best.id)
+          ok += 1
+        }
+        await reloadFromDb?.()
+        alert(`자동매칭 반영 완료: ${ok}건`)
+      }
+    }catch(e){
+      alert(e.message || '자동매칭 전체 반영 중 오류가 발생했습니다.')
+    }finally{
+      setAutoApplying(false)
     }
   }
 
@@ -304,7 +290,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
     <PageHead title="통장매칭" desc="입금자명·입금액·거래기록을 회원 미수금과 대조해 수납으로 반영합니다.">
       <button className="btn soft" onClick={()=>navigate?.('import')}>거래내역 업로드</button>
       <button className="btn soft paste-btn" onClick={()=>setShowPaste(true)}>붙여넣기 입력</button>
-      <button className="btn green" onClick={handleAutoAll}>자동매칭 전체 반영</button>
+      <button className="btn green" disabled={autoApplying} onClick={handleAutoAll}>{autoApplying ? '반영 중...' : '자동매칭 전체 반영'}</button>
       <button className="btn danger-soft" onClick={resetResults}>매칭결과 초기화</button>
     </PageHead>
 
@@ -365,7 +351,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
                   <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">
-                    {!done && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id, inferChargeItem(best, d))}>반영</button>}
+                    {!done && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id)}>반영</button>}
                     {!done && <button className="btn mini soft" onClick={()=>setModal(d)}>{best?'후보':'수동'}</button>}
                     {!done && <button className="btn mini" onClick={()=>excludeDeposit(d.id)}>제외</button>}
                     <button className="btn mini" onClick={()=>setOpenId(isOpen?null:d.id)}>{isOpen?'닫기':'원문'}</button>

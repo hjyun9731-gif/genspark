@@ -21,37 +21,6 @@ from ..schemas import DepositMatch
 router = APIRouter(prefix="/api/deposits", tags=["deposits"])
 
 
-NON_ARREARS_INCOME_ITEMS = {"협회가입비", "자격증명발급비", "기타"}
-
-
-def _accounting_type(charge_item: str | None) -> str:
-    if charge_item == "협회가입비":
-        return "가수금"
-    if charge_item == "자격증명발급비":
-        return "잡수입"
-    if charge_item == "기타":
-        return "기타수입"
-    return "회비수입"
-
-
-def _is_non_arrears_income(charge_item: str | None) -> bool:
-    return (charge_item or "") in NON_ARREARS_INCOME_ITEMS
-
-
-def _infer_income_item(deposit: Deposit, member: Member | None = None) -> str:
-    text = f"{deposit.depositor_name or ''} {deposit.memo or ''}"
-    if any(k in text for k in ["가입비", "협회가입", "신규가입"]):
-        return "협회가입비"
-    if any(k in text for k in ["자격증명", "증명발급", "발급비", "재발급"]):
-        return "자격증명발급비"
-    return (member.charge_item if member and member.charge_item else "관리비")
-
-
-def _ym_from_date(d: date | None) -> str:
-    d = _safe_deposit_date(d) if d else date.today()
-    return d.strftime("%Y-%m")
-
-
 def _safe_deposit_date(d: date) -> date:
     """이미 잘못 저장된 2030-12-25 같은 날짜를 화면/수납반영 기준에서 보정한다.
 
@@ -168,6 +137,8 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
         if member.status != "정상":
             continue
         arrears = _arrears_amount(member)
+        if arrears <= 0:
+            continue
 
         score = 0
         reasons: list[str] = []
@@ -324,6 +295,92 @@ def create_deposits(payload: dict = Body(...), db: Session = Depends(get_db)):
     return {"ok": True, "inserted": inserted, "skipped": skipped}
 
 
+def _apply_deposit_to_member(db: Session, deposit: Deposit, member: Member) -> dict:
+    """통장 입금 1건을 회원 미수금에 반영한다.
+
+    자동매칭 전체반영과 개별 반영이 같은 로직을 쓰도록 분리했다.
+    여기서는 commit 하지 않는다. 호출자가 일괄 commit 한다.
+    """
+    if deposit is None or member is None:
+        raise ValueError("deposit/member required")
+    if deposit.is_excluded or deposit.status in {"매칭완료", "반영완료", "제외"}:
+        raise ValueError("이미 처리된 입금건입니다.")
+
+    remain = int(deposit.amount or 0)
+    applied = 0
+    for item in _open_items(member):
+        if remain <= 0:
+            break
+        pay_amount = min(remain, int(item.amount or 0))
+        if pay_amount <= 0:
+            continue
+        db.add(Payment(
+            member_id=member.id,
+            paid_for_ym=item.ym,
+            charge_item=item.charge_item,
+            amount=pay_amount,
+            method="통장매칭",
+            paid_date=_safe_deposit_date(deposit.deposit_date),
+            deposit_id=deposit.id,
+        ))
+        applied += pay_amount
+        remain -= pay_amount
+        if pay_amount >= item.amount:
+            item.is_paid = True
+        else:
+            item.amount -= pay_amount
+        member.last_payment_ym = item.ym
+
+    if applied <= 0:
+        raise ValueError("반영할 미수금이 없습니다.")
+
+    deposit.status = "매칭완료"
+    deposit.matched_member_id = member.id
+    deposit.hint = f"{member.name} / {member.vehicle_no} / 반영 {applied:,}원"
+    db.add(MemberHistory(
+        member_id=member.id,
+        content=f"통장매칭 수납 반영 {applied:,}원 (입금자 {deposit.depositor_name}, 차액 {remain:,}원)",
+        actor="system",
+    ))
+    return {"deposit_id": deposit.id, "member_id": member.id, "applied": applied, "remain": remain}
+
+
+@router.post("/auto-match-all")
+def auto_match_all(db: Session = Depends(get_db)):
+    """현재 자동매칭으로 판정되는 입금건을 서버에서 일괄 반영한다.
+
+    프론트가 수십/수백 건을 1건씩 연속 요청하면 화면이 멈추거나
+    중간 실패 때 빈 화면처럼 보일 수 있어 서버 일괄 처리로 고정한다.
+    """
+    deposits = db.scalars(select(Deposit).order_by(Deposit.deposit_date.asc(), Deposit.id.asc())).all()
+    members = db.scalars(
+        select(Member).options(selectinload(Member.receivable_items)).where(Member.status == "정상")
+    ).unique().all()
+
+    applied_rows = []
+    skipped_rows = []
+    for deposit in deposits:
+        if deposit.status in {"매칭완료", "반영완료", "제외"} or deposit.is_excluded:
+            continue
+        candidates = _match_candidates(deposit, members)
+        if _display_status(deposit, candidates) != "자동매칭" or not candidates:
+            continue
+        best = candidates[0].member
+        try:
+            applied_rows.append(_apply_deposit_to_member(db, deposit, best))
+        except Exception as exc:
+            skipped_rows.append({"deposit_id": deposit.id, "reason": str(exc)})
+
+    db.commit()
+    return {
+        "ok": True,
+        "matched": len(applied_rows),
+        "skipped": len(skipped_rows),
+        "applied": applied_rows[:100],
+        "skipped_rows": skipped_rows[:100],
+    }
+
+
 @router.post("/{deposit_id}/match")
 def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(get_db)):
     deposit = db.get(Deposit, deposit_id)
@@ -336,51 +393,13 @@ def match_deposit(deposit_id: int, payload: DepositMatch, db: Session = Depends(
     if member is None:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
 
-    remain = int(deposit.amount or 0)
-    charge_item = payload.charge_item or _infer_income_item(deposit, member)
-    paid_date = _safe_deposit_date(deposit.deposit_date)
+    try:
+        result = _apply_deposit_to_member(db, deposit, member)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    # 협회가입비(가수금), 자격증명발급비(잡수입), 기타는 미수금 차감 없이 수납내역만 남긴다.
-    if _is_non_arrears_income(charge_item):
-        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=charge_item, amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        deposit.status = "매칭완료"
-        deposit.matched_member_id = member.id
-        deposit.hint = f"{member.name} / {member.vehicle_no} / {charge_item}({_accounting_type(charge_item)}) {remain:,}원"
-        db.add(MemberHistory(member_id=member.id, content=f"통장매칭 {charge_item}({_accounting_type(charge_item)}) 수납 {remain:,}원 / 미수금 차감 없음", actor="system"))
-        db.commit()
-        return {"ok": True, "deposit_id": deposit.id, "member_id": member.id, "applied": remain, "remain": 0, "non_arrears": True, "accounting_type": _accounting_type(charge_item)}
-
-    applied = 0
-    for item in _open_items(member):
-        if remain <= 0:
-            break
-        pay_amount = min(remain, item.amount)
-        if pay_amount <= 0:
-            continue
-        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        applied += pay_amount
-        remain -= pay_amount
-        if pay_amount >= item.amount:
-            item.is_paid = True
-        else:
-            item.amount -= pay_amount
-        member.last_payment_ym = item.ym
-
-    # 미수 0원 회원도 납부 가능하다. 협회비/관리비 추가입금은 선납/추가입금 수납내역으로 남긴다.
-    if applied <= 0 and remain > 0:
-        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=charge_item, amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
-        applied = remain
-        remain = 0
-        history = f"통장매칭 {charge_item} 선납/추가입금 {applied:,}원"
-    else:
-        history = f"통장매칭 수납 반영 {applied:,}원 (입금자 {deposit.depositor_name}, 차액 {remain:,}원)"
-
-    deposit.status = "매칭완료"
-    deposit.matched_member_id = member.id
-    deposit.hint = f"{member.name} / {member.vehicle_no} / {charge_item} 반영 {applied:,}원"
-    db.add(MemberHistory(member_id=member.id, content=history, actor="system"))
     db.commit()
-    return {"ok": True, "deposit_id": deposit.id, "member_id": member.id, "applied": applied, "remain": remain}
+    return {"ok": True, **result}
 
 
 @router.post("/{deposit_id}/exclude")
