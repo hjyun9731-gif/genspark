@@ -71,6 +71,16 @@ def _arrears_amount(member: Member) -> int:
     return sum(x.amount for x in _open_items(member))
 
 
+def _current_balance(member: Member) -> int:
+    """회원의 현재잔액.
+
+    기존 _arrears_amount는 양수 미수만 합산해서 선납(-5,000원) 회원을
+    통장매칭 후보에서 빠뜨렸다. 통장매칭 후보/수동반영에서는 음수 선납도
+    선택 가능해야 하므로 미납 처리된 항목 전체를 합산한다.
+    """
+    return int(sum(int(x.amount or 0) for x in member.receivable_items if not x.is_paid))
+
+
 def _digits(text: str | None) -> str:
     return re.sub(r"\D", "", text or "")
 
@@ -175,9 +185,7 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
     for member in members:
         if member.status != "정상":
             continue
-        arrears = _arrears_amount(member)
-        if arrears <= 0:
-            continue
+        arrears = _current_balance(member)
 
         score = 0
         reasons: list[str] = []
@@ -215,15 +223,19 @@ def _match_candidates(deposit: Deposit, members: list[Member]) -> list[Candidate
                 break
 
         # 금액은 보조 점수다. 금액만 맞는 회원은 후보 제외.
-        if amount == arrears:
-            score += 25
-            reasons.append("금액일치")
-        elif amount and arrears and amount < arrears:
-            score += 8
-            reasons.append("부분납부가능")
-        elif amount and arrears and amount > arrears:
-            score += 4
-            reasons.append("초과입금확인")
+        if arrears > 0:
+            if amount == arrears:
+                score += 25
+                reasons.append("금액일치")
+            elif amount and amount < arrears:
+                score += 8
+                reasons.append("부분납부가능")
+            elif amount and amount > arrears:
+                score += 4
+                reasons.append("초과입금확인")
+        elif arrears < 0:
+            score += 6
+            reasons.append("선납회원")
 
         if not primary_match:
             continue
@@ -283,7 +295,8 @@ def list_deposits(
         best = candidates[0] if candidates else None
         matched = next((m for m in members if m.id == d.matched_member_id), None) if d.matched_member_id else None
         if matched and not best:
-            best = Candidate(matched, 999, ["반영완료"], _arrears_amount(matched), int(d.amount or 0) - _arrears_amount(matched))
+            bal = _current_balance(matched)
+            best = Candidate(matched, 999, ["반영완료"], bal, int(d.amount or 0) - bal)
         rows.append({
             "id": d.id,
             "deposit_date": _safe_deposit_date(d.deposit_date).isoformat(),
@@ -379,15 +392,33 @@ def _apply_deposit_to_member(db: Session, deposit: Deposit, member: Member) -> d
             item.amount -= pay_amount
         member.last_payment_ym = item.ym
 
+    # 양수 미수 항목이 없는 회원(0원/선납/초과입금)도 통장매칭에서 선택할 수 있어야 한다.
+    # 이 경우 미수금을 차감하지 않고 수납내역만 남겨 입금건을 완료 처리한다.
     if applied <= 0:
-        raise ValueError("반영할 미수금이 없습니다.")
+        paid_date = _safe_deposit_date(deposit.deposit_date)
+        paid_for_ym = f"{paid_date.year}-{paid_date.month:02d}"
+        applied = int(deposit.amount or 0)
+        remain = 0
+        db.add(Payment(
+            member_id=member.id,
+            paid_for_ym=paid_for_ym,
+            charge_item="선납/초과입금",
+            amount=applied,
+            method="통장매칭",
+            paid_date=paid_date,
+            deposit_id=deposit.id,
+        ))
+        member.last_payment_ym = paid_for_ym
+        history_text = f"통장매칭 선납/초과입금 기록 {applied:,}원 (입금자 {deposit.depositor_name})"
+    else:
+        history_text = f"통장매칭 수납 반영 {applied:,}원 (입금자 {deposit.depositor_name}, 차액 {remain:,}원)"
 
     deposit.status = "매칭완료"
     deposit.matched_member_id = member.id
     deposit.hint = f"{member.name} / {member.vehicle_no} / 반영 {applied:,}원"
     db.add(MemberHistory(
         member_id=member.id,
-        content=f"통장매칭 수납 반영 {applied:,}원 (입금자 {deposit.depositor_name}, 차액 {remain:,}원)",
+        content=history_text,
         actor="system",
     ))
     return {"deposit_id": deposit.id, "member_id": member.id, "applied": applied, "remain": remain}
