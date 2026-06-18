@@ -28,6 +28,7 @@ export const api = {
   registerClosure: (id, body) => http(`/members/${id}/closure`, { method: 'POST', body: JSON.stringify(body) }),
   listDeposits: (params = {}) => http(`/deposits${qs(params)}`),
   matchDeposit: (id, body) => http(`/deposits/${id}/match`, { method: 'POST', body: JSON.stringify(body) }),
+  matchDepositGroup: (id, body = {}) => http(`/deposits/${id}/group-match`, { method: 'POST', body: JSON.stringify(body || {}) }),
   autoMatchAllDeposits: () => http('/deposits/auto-match-all', { method: 'POST' }),
   excludeDeposit: (id) => http(`/deposits/${id}/exclude`, { method: 'POST' }),
   resetPendingDeposits: () => http('/deposits/pending', { method: 'DELETE' }),

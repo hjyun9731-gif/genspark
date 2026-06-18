@@ -12,6 +12,11 @@ from ..models import Member, MemberHistory, Payment, ReceivableItem
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
+NON_ARREARS_ITEMS = {"협회가입비", "자격증명발급비", "기타", "선납/초과입금"}
+
+def _is_non_arrears(item: str | None) -> bool:
+    return (item or "") in NON_ARREARS_ITEMS
+
 
 class PaymentUpdate(BaseModel):
     paid_for_ym: str | None = None
@@ -132,30 +137,34 @@ def cancel_payment(payment_id: int, db: Session = Depends(get_db)):
     if p is None:
         raise HTTPException(status_code=404, detail="수납내역을 찾을 수 없습니다.")
 
-    item = db.scalar(
-        select(ReceivableItem).where(
-            ReceivableItem.member_id == p.member_id,
-            ReceivableItem.ym == p.paid_for_ym,
+    restored = False
+    if not _is_non_arrears(p.charge_item):
+        item = db.scalar(
+            select(ReceivableItem).where(
+                ReceivableItem.member_id == p.member_id,
+                ReceivableItem.ym == p.paid_for_ym,
+            )
         )
-    )
-    if item is None:
-        item = ReceivableItem(
-            member_id=p.member_id,
-            ym=p.paid_for_ym,
-            charge_item=p.charge_item,
-            amount=p.amount,
-            is_paid=False,
-        )
-        db.add(item)
-    else:
-        item.is_paid = False
-        item.amount = int(item.amount or 0) + int(p.amount or 0)
+        if item is None:
+            item = ReceivableItem(
+                member_id=p.member_id,
+                ym=p.paid_for_ym,
+                charge_item=p.charge_item,
+                amount=p.amount,
+                is_paid=False,
+            )
+            db.add(item)
+        else:
+            item.is_paid = False
+            item.amount = int(item.amount or 0) + int(p.amount or 0)
+        restored = True
 
     if p.deposit:
         p.deposit.status = "대기"
         p.deposit.matched_member_id = None
 
-    db.add(MemberHistory(member_id=p.member_id, content=f"수납 취소: {p.paid_for_ym} {p.amount:,}원 미수금 복구", actor="system"))
+    content = f"수납 취소: {p.paid_for_ym} {p.amount:,}원" + (" 미수금 복구" if restored else " 기록성 수납 삭제")
+    db.add(MemberHistory(member_id=p.member_id, content=content, actor="system"))
     db.delete(p)
     db.commit()
     return {"ok": True, "cancelled": True}

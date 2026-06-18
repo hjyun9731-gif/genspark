@@ -137,6 +137,7 @@ class DepositOut(ORMModel):
 class DepositMatch(BaseModel):
     """POST /deposits/{id}/match — 입금건을 회원에 매칭."""
     member_id: str
+    charge_item: str | None = None  # 협회비/관리비/협회가입비/자격증명발급비/기타
 
 
 # ---------- 예정자 ----------

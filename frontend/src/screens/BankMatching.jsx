@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Card, PageHead, Badge, formatWon } from '../components.jsx'
 import { api } from '../api.js'
 
+const INCOME_ACTIONS = [
+  { value: null, label: '회비반영' },
+  { value: '협회가입비', label: '가수금' },
+  { value: '자격증명발급비', label: '잡수입' },
+  { value: '기타', label: '기타' },
+]
+
 const STATUS_TONE = {
   '자동매칭': 'green',
   '후보확인': 'orange',
@@ -29,34 +36,12 @@ function getBestCandidate(d, members){
   return d.bestCandidate || (d.candidateId ? members.find(m => m.id === d.candidateId) : null)
 }
 
-function extractUsefulMemo(text){
-  const raw = String(text || '').trim()
-  if(!raw) return ''
-  const parts = raw.split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean)
-  const useful = []
-  for(const part of parts){
-    const p = part.trim()
-    // 통장매칭 화면에는 주소/사업자/공문주소 같은 회원원장 정보는 보여주지 않는다.
-    if(/^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]/.test(p)) continue
-    // 사용자가 요청한 것은 2026미수금 파일의 비고/입금자 별칭이다.
-    if(/^미수금\s*비고\s*[:：]/.test(p)) useful.push(p.replace(/^미수금\s*비고\s*[:：]\s*/, ''))
-    else if(/^(비고|비고2|비고3)\s*[:：]/.test(p)) useful.push(p.replace(/^(비고|비고2|비고3)\s*[:：]\s*/, ''))
-  }
-  return useful.join(' / ')
-}
-
 function memberMemo(m){
-  return extractUsefulMemo(m?.memo || m?.note || m?.remark || m?.remarks || '')
+  return m?.memo || m?.note || m?.remark || m?.remarks || ''
 }
 
-function usefulHint(text){
-  const raw = String(text || '').trim()
-  if(!raw) return ''
-  // 붙여넣기/자동매칭 안내문, 관리번호, 주소 같은 내부 표시용 문구는 통장매칭 표에 노출하지 않는다.
-  if(/붙여넣기|자동매칭|수동매칭|후보|관리번호|주소|사업자|공문/.test(raw)) return ''
-  const cleaned = extractUsefulMemo(raw) || raw
-  if(/^(신|양|폐|이)\d{2}[-–]\d+$/i.test(cleaned)) return ''
-  return cleaned
+function getGroupCandidate(d){
+  return d?.groupCandidate || (d?.groupCandidates && d.groupCandidates[0]) || null
 }
 
 function normalizeText(v){
@@ -77,100 +62,48 @@ function DepositDetail({deposit}){
         <div><b>거래내용</b><span>{deposit.description || deposit.transactionType || '-'}</span></div>
         <div><b>원본구분</b><span>{deposit.sourceType || deposit.source || '-'}</span></div>
         <div><b>입금자/기록</b><span>{deposit.depositorName || deposit.rawName || '-'}</span></div>
-        <div><b>미수금 비고</b><span>{usefulHint(deposit.hint) || '-'}</span></div>
+        <div><b>매칭메모</b><span>{deposit.hint || '-'}</span></div>
       </div>
     </td>
   </tr>
 }
 
-function ManualMatchModal({deposit, members, onClose, onMatch}){
+function ManualMatchModal({deposit, members, onClose, onMatch, onGroupMatch}){
   const [q,setQ]=useState('')
-  const [remoteRows, setRemoteRows] = useState([])
-  const [searching, setSearching] = useState(false)
+  const [serverRows,setServerRows]=useState([])
+  const [loading,setLoading]=useState(false)
   const candidates = deposit?.candidates || []
+  const groupCandidates = deposit?.groupCandidates || (deposit?.groupCandidate ? [deposit.groupCandidate] : [])
 
-  // 핵심 수정:
-  // 기존 수동검색은 화면에 이미 로딩된 members 배열만 뒤져서 누락이 생겼다.
-  // 특히 현재 입금자(예: 우양재) 창에서는 candidate 목록이 차량뒤4자리 후보로 채워지고,
-  // 전체 members가 일부만 로딩되어 있으면 본인 검색 결과가 안 나왔다.
-  // 검색어가 입력되면 서버 /api/members?q= 로 직접 조회해 정확한 회원을 가져온다.
-  useEffect(() => {
-    const keyword = String(q || '').trim()
-    if(!keyword){
-      setRemoteRows([])
-      setSearching(false)
-      return
-    }
+  useEffect(()=>{
     let alive = true
-    setSearching(true)
-    const t = setTimeout(async () => {
+    async function run(){
+      const keyword = q.trim()
+      if(!keyword){ setServerRows([]); return }
+      setLoading(true)
       try{
-        const rows = await api.listMembers({ q: keyword, status: '정상', size: 200 })
-        if(alive) setRemoteRows(Array.isArray(rows) ? rows : [])
-      }catch(e){
-        if(alive) setRemoteRows([])
-      }finally{
-        if(alive) setSearching(false)
-      }
-    }, 180)
-    return () => { alive = false; clearTimeout(t) }
-  }, [q])
+        const rows = await api.listMembers({q:keyword, status:'정상', size:1000})
+        if(alive) setServerRows(Array.isArray(rows) ? rows : [])
+      }catch(e){ if(alive) setServerRows([]) }
+      finally{ if(alive) setLoading(false) }
+    }
+    const t = setTimeout(run, 200)
+    return ()=>{ alive=false; clearTimeout(t) }
+  },[q])
 
   const memberRows = useMemo(()=>{
-    const byId = new Map()
-    const add = (m, source='') => {
-      if(!m || m.id === undefined || m.id === null) return
-      const key = String(m.id)
-      byId.set(key, { ...(byId.get(key) || {}), ...m, _source: source || byId.get(key)?._source || '' })
-    }
-
-    // 검색 결과는 최우선으로 넣는다. 그래야 우양재 검색 시 우양재가 반드시 보인다.
-    ;(remoteRows || []).forEach(m => add(m, 'server'))
-    ;(deposit?.candidates || []).forEach(m => add(m, 'candidate'))
-    add(deposit?.bestCandidate, 'best')
-    ;(members || []).forEach(m => add(m, 'local'))
-
-    const base = Array.from(byId.values()).filter(m => {
-      const st = String(m.status || '정상')
-      return !['폐업','폐지','양도','이관','탈퇴','제외'].includes(st)
-    })
-    const s = normalizeText(q)
-    const memberSearchText = (m) => normalizeText([
-      m.name, m.memberName, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no,
-      m.phone, m.mobile, m.sigun, m.region, memberMemo(m)
-    ].join(' '))
-    const matched = !s ? base : base.filter(m => memberSearchText(m).includes(s))
-    const score = (m) => {
-      if(!s) return 0
-      const name = normalizeText(m.name || m.memberName || '')
-      const vehicle = normalizeText(m.vehicleNo || m.vehicle_no || '')
-      const mgmt = normalizeText(m.mgmtNo || m.mgmt_no || '')
-      const phone = normalizeText(m.phone || m.mobile || '')
-      const memo = normalizeText(memberMemo(m))
-      let sc = 0
-      if(name === s) sc += 10000
-      else if(name.startsWith(s)) sc += 9000
-      else if(name.includes(s)) sc += 8000
-      if(vehicle.includes(s)) sc += 7000
-      if(mgmt.includes(s)) sc += 6000
-      if(phone.includes(s)) sc += 5000
-      if(memo.includes(s)) sc += 4000
-      if(m._source === 'server') sc += 300
-      if(m._source === 'candidate' || m._source === 'best') sc += 150
-      return sc
-    }
-    return matched.sort((a,b)=>{
-      const sa = score(a)
-      const sb = score(b)
-      if(sb !== sa) return sb - sa
-      const an = String(a.name || a.memberName || '')
-      const bn = String(b.name || b.memberName || '')
-      if(an !== bn) return an.localeCompare(bn, 'ko')
-      const aa = Number(a.totalArrears || a.arrears_amount || 0)
-      const bb = Number(b.totalArrears || b.arrears_amount || 0)
-      return bb - aa
+    const keyword = q.trim()
+    const s = normalizeText(keyword)
+    const source = keyword ? serverRows : (members || [])
+    const base = (source || []).filter(m => m.status === '정상')
+    const filtered = keyword ? base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, memberMemo(m)].join(' ')).includes(s)) : base
+    return filtered.sort((a,b)=>{
+      const an=normalizeText(a.name), bn=normalizeText(b.name)
+      const av=normalizeText([a.vehicleNo,a.vehicle_no].join(' ')), bv=normalizeText([b.vehicleNo,b.vehicle_no].join(' '))
+      const score=(m,n,v)=> n===s?0:n.startsWith(s)?1:v.includes(s)?2:normalizeText(memberMemo(m)).includes(s)?3:4
+      return score(a,an,av)-score(b,bn,bv) || (Number(b.totalArrears)||0)-(Number(a.totalArrears)||0)
     }).slice(0,100)
-  },[members,q,deposit,remoteRows])
+  },[members,serverRows,q])
   if(!deposit) return null
   return <div className="modal-bg">
     <div className="modal wide match-modal">
@@ -189,6 +122,21 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
         <div><b>상태</b><strong><StatusBadge status={getStatus(deposit)}/></strong></div>
       </div>
 
+      {groupCandidates.length ? <>
+        <div className="section-title compact-title">묶음수납 후보 <span>허장덕 · 조철만 · 주신평 · 합동/화물유지계약</span></div>
+        <div className="admin-table-wrap modal-table-scroll">
+          <table className="admin-table dense"><thead><tr><th>묶음</th><th>대상</th><th className="right">예상금액</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
+            {groupCandidates.map(g=><tr key={g.code || g.title}>
+              <td><b>{g.title}</b><br/><span className="tiny muted">{g.reason}</span></td>
+              <td>{g.resolvedCount}/{g.targetCount}명 확인</td>
+              <td className="right money">{formatWon(g.expectedAmount)}</td>
+              <td className="right">{diffText(g.diff)}</td>
+              <td><button className="btn mini green" onClick={()=>onGroupMatch(deposit.id, g.code)}>묶음반영</button></td>
+            </tr>)}
+          </tbody></table>
+        </div>
+      </> : null}
+
       {candidates.length ? <>
         <div className="section-title compact-title">추천 후보</div>
         <div className="admin-table-wrap modal-table-scroll">
@@ -201,7 +149,7 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
               <td className="muted-cell">{shortText(c.reason || c.reasons?.join(' · ') || '-', 52)}</td>
               <td className="right money">{formatWon(c.totalArrears || c.arrears_amount)}</td>
               <td className="right">{diffText(c.diff)}</td>
-              <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, c.id)}>반영</button></td>
+              <td className="action-cell">{INCOME_ACTIONS.map(a => <button key={a.label} className={a.value ? 'btn mini soft' : 'btn mini green'} onClick={()=>onMatch(deposit.id, c.id, a.value)}>{a.label}</button>)}</td>
             </tr>)}
           </tbody></table>
         </div>
@@ -209,22 +157,20 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
 
       <div className="section-title compact-title">회원 검색</div>
       <input className="input full" value={q} onChange={e=>setQ(e.target.value)} placeholder="이름 / 차량번호 / 관리번호 / 전화번호 검색" />
-      <div className="muted tiny mt6">
-        {q ? (searching ? '회원 DB 검색 중…' : `검색 결과 ${memberRows.length}명`) : '검색어를 입력하면 회원 DB에서 다시 찾습니다.'}
-      </div>
       <div className="admin-table-wrap modal-table-scroll mt8">
         <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th>비고/메모</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
           {memberRows.map(m=><tr key={m.id}>
-            <td><b>{m.name || m.memberName}</b></td>
+            <td><b>{m.name}</b></td>
             <td>{m.sigun || '-'}</td>
             <td>{m.vehicleNo || m.vehicle_no || '-'}</td>
             <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
             <td>{m.membership || '-'}</td>
             <td className="muted-cell memo-cell">{shortText(memberMemo(m) || '-', 34)}</td>
-            <td className="right money">{formatWon(m.totalArrears ?? m.arrears_amount ?? 0)}</td>
-            <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id)}>선택</button></td>
+            <td className="right money">{formatWon(m.totalArrears)}</td>
+            <td className="action-cell">{INCOME_ACTIONS.map(a => <button key={a.label} className={a.value ? 'btn mini soft' : 'btn mini green'} onClick={()=>onMatch(deposit.id, m.id, a.value)}>{a.label}</button>)}</td>
           </tr>)}
-          {!memberRows.length && <tr><td colSpan={8} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
+          {loading && <tr><td colSpan={8} className="empty-cell compact">검색 중...</td></tr>}
+          {!loading && !memberRows.length && <tr><td colSpan={8} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
         </tbody></table>
       </div>
     </div>
@@ -303,7 +249,7 @@ function PasteDepositModal({onClose, onSaved}){
   </div>
 }
 
-export default function BankMatching({data, matchDeposit, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
+export default function BankMatching({data, matchDeposit, matchDepositGroup, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
   const [q,setQ]=useState('')
   const [status,setStatus]=useState('전체')
   const [resetKey,setResetKey]=useState(0)
@@ -346,8 +292,13 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const pageRows = rows.slice((page-1)*pageSize, page*pageSize)
 
-  async function doMatch(depositId, memberId){
-    await matchDeposit(depositId, memberId)
+  async function doMatch(depositId, memberId, chargeItem=null){
+    await matchDeposit(depositId, memberId, chargeItem)
+    setModal(null)
+  }
+
+  async function doGroupMatch(depositId, groupCode=null){
+    await matchDepositGroup?.(depositId, groupCode)
     setModal(null)
   }
 
@@ -448,12 +399,13 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
           </thead>
           <tbody>
             {pageRows.map(d=>{
+              const group=getGroupCandidate(d)
               const best=getBestCandidate(d, members)
               const st=getStatus(d)
               const done=['매칭완료','제외'].includes(st)
               const amount = Number(d.amount)||0
-              const arrears = Number(best?.totalArrears || best?.arrears_amount || d.currentArrears || 0)
-              const diff = best ? (best.diff ?? d.difference ?? amount - arrears) : null
+              const arrears = Number(group?.expectedAmount || best?.totalArrears || best?.arrears_amount || d.currentArrears || 0)
+              const diff = group ? group.diff : best ? (best.diff ?? d.difference ?? amount - arrears) : null
               const isOpen = openId === d.id
               return <React.Fragment key={d.id}>
                 <tr className={done ? 'muted-row' : ''}>
@@ -462,16 +414,12 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="clip-cell" title={d.memo || d.description || ''}>{shortText(d.memo || d.description || '-', 46)}</td>
                   <td className="right money nowrap">{formatWon(amount)}</td>
                   <td><StatusBadge status={st}/>{d.candidateCount>1 && <div className="tiny muted">후보 {d.candidateCount}명</div>}</td>
-                  <td>
-                    <b>{best?.name || '-'}</b>
-                    {!best && <div className="tiny muted">수동매칭 필요</div>}
-                    {best && memberMemo(best) && <div className="tiny memo-line">미수금 비고: {shortText(memberMemo(best), 38)}</div>}
-                    {usefulHint(d.hint) && <div className="tiny memo-line">미수금 비고: {shortText(usefulHint(d.hint), 38)}</div>}
-                  </td>
-                  <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
-                  <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
+                  <td><b>{group ? group.title : best?.name || '-'}</b><div className="tiny muted">{group ? `묶음 ${group.resolvedCount}/${group.targetCount}명` : best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{!group && best && memberMemo(best) && <div className="tiny memo-line">{shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
+                  <td className="nowrap">{group ? '대납자 묶음' : best?.vehicleNo || best?.vehicle_no || '-'}</td>
+                  <td className="right nowrap"><b>{(group || best) ? formatWon(arrears) : '-'}</b><div className="tiny muted">{(group || best) ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">
-                    {!done && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id)}>반영</button>}
+                    {!done && group && <button className="btn mini green" onClick={()=>doGroupMatch(d.id, group.code)}>묶음반영</button>}
+                    {!done && !group && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id)}>반영</button>}
                     {!done && <button className="btn mini soft" onClick={()=>setModal(d)}>{best?'후보':'수동'}</button>}
                     {!done && <button className="btn mini" onClick={()=>excludeDeposit(d.id)}>제외</button>}
                     <button className="btn mini" onClick={()=>setOpenId(isOpen?null:d.id)}>{isOpen?'닫기':'원문'}</button>
@@ -493,7 +441,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
         </div>
       </div>
     </Card>
-    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch}/>
+    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch} onGroupMatch={doGroupMatch}/>
     {showPaste && <PasteDepositModal onClose={()=>setShowPaste(false)} onSaved={reloadFromDb}/>}
   </div>
 }
