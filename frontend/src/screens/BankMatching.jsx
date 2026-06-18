@@ -49,6 +49,16 @@ function memberMemo(m){
   return extractUsefulMemo(m?.memo || m?.note || m?.remark || m?.remarks || '')
 }
 
+function usefulHint(text){
+  const raw = String(text || '').trim()
+  if(!raw) return ''
+  // 붙여넣기/자동매칭 안내문, 관리번호, 주소 같은 내부 표시용 문구는 통장매칭 표에 노출하지 않는다.
+  if(/붙여넣기|자동매칭|수동매칭|후보|관리번호|주소|사업자|공문/.test(raw)) return ''
+  const cleaned = extractUsefulMemo(raw) || raw
+  if(/^(신|양|폐|이)\d{2}[-–]\d+$/i.test(cleaned)) return ''
+  return cleaned
+}
+
 function normalizeText(v){
   return String(v || '').replace(/\s+/g, '').toLowerCase()
 }
@@ -67,7 +77,7 @@ function DepositDetail({deposit}){
         <div><b>거래내용</b><span>{deposit.description || deposit.transactionType || '-'}</span></div>
         <div><b>원본구분</b><span>{deposit.sourceType || deposit.source || '-'}</span></div>
         <div><b>입금자/기록</b><span>{deposit.depositorName || deposit.rawName || '-'}</span></div>
-        <div><b>매칭메모</b><span>{deposit.hint || '-'}</span></div>
+        <div><b>미수금 비고</b><span>{usefulHint(deposit.hint) || '-'}</span></div>
       </div>
     </td>
   </tr>
@@ -370,7 +380,12 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="clip-cell" title={d.memo || d.description || ''}>{shortText(d.memo || d.description || '-', 46)}</td>
                   <td className="right money nowrap">{formatWon(amount)}</td>
                   <td><StatusBadge status={st}/>{d.candidateCount>1 && <div className="tiny muted">후보 {d.candidateCount}명</div>}</td>
-                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{best && memberMemo(best) && <div className="tiny memo-line">미수금 비고: {shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
+                  <td>
+                    <b>{best?.name || '-'}</b>
+                    {!best && <div className="tiny muted">수동매칭 필요</div>}
+                    {best && memberMemo(best) && <div className="tiny memo-line">미수금 비고: {shortText(memberMemo(best), 38)}</div>}
+                    {usefulHint(d.hint) && <div className="tiny memo-line">미수금 비고: {shortText(usefulHint(d.hint), 38)}</div>}
+                  </td>
                   <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
                   <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">
