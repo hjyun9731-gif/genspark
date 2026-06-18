@@ -29,8 +29,24 @@ function getBestCandidate(d, members){
   return d.bestCandidate || (d.candidateId ? members.find(m => m.id === d.candidateId) : null)
 }
 
+function extractUsefulMemo(text){
+  const raw = String(text || '').trim()
+  if(!raw) return ''
+  const parts = raw.split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean)
+  const useful = []
+  for(const part of parts){
+    const p = part.trim()
+    // 통장매칭 화면에는 주소/사업자/공문주소 같은 회원원장 정보는 보여주지 않는다.
+    if(/^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]/.test(p)) continue
+    // 사용자가 요청한 것은 2026미수금 파일의 비고/입금자 별칭이다.
+    if(/^미수금\s*비고\s*[:：]/.test(p)) useful.push(p.replace(/^미수금\s*비고\s*[:：]\s*/, ''))
+    else if(/^(비고|비고2|비고3)\s*[:：]/.test(p)) useful.push(p.replace(/^(비고|비고2|비고3)\s*[:：]\s*/, ''))
+  }
+  return useful.join(' / ')
+}
+
 function memberMemo(m){
-  return m?.memo || m?.note || m?.remark || m?.remarks || ''
+  return extractUsefulMemo(m?.memo || m?.note || m?.remark || m?.remarks || '')
 }
 
 function normalizeText(v){
@@ -354,7 +370,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="clip-cell" title={d.memo || d.description || ''}>{shortText(d.memo || d.description || '-', 46)}</td>
                   <td className="right money nowrap">{formatWon(amount)}</td>
                   <td><StatusBadge status={st}/>{d.candidateCount>1 && <div className="tiny muted">후보 {d.candidateCount}명</div>}</td>
-                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{best && memberMemo(best) && <div className="tiny memo-line">비고: {shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
+                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{best && memberMemo(best) && <div className="tiny memo-line">미수금 비고: {shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
                   <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
                   <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">

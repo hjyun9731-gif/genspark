@@ -106,11 +106,19 @@ def _memo_aliases(text: str | None) -> list[str]:
     parts = re.split(r"[,/|;·\n\r]+", raw)
     out: list[str] = []
     for part in parts:
+        part = part.strip()
+        # 주소/사업자/공문주소 등 기본정보는 입금자 별칭으로 쓰지 않는다.
+        if re.match(r"^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]", part):
+            continue
+        part = re.sub(r"^(미수금\s*비고|원장\s*비고|비고|비고2|비고3)\s*[:：]", "", part, flags=re.I).strip()
         part = re.sub(r"^(공|입금자|입금|이체|대리|대표)\s*[:：-]?", "", part.strip(), flags=re.I)
         # 띄어쓴 이름은 붙여서 비교하되, 표시용은 원문에 가깝게 보존한다.
         norm = _name_norm(part)
         norm = re.sub(r'[()\[\]{}:：\'"`~!@#$%^&*_+=<>?\-]', "", norm)
         if len(norm) < 2 or norm.lower() in blocked:
+            continue
+        # 숫자/주소처럼 보이는 긴 기본정보는 별칭에서 제외
+        if re.search(r"\d{2,}", norm) and not re.search(r"[가-힣]", norm):
             continue
         if norm not in [_name_norm(x) for x in out]:
             out.append(part.strip())

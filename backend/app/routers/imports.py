@@ -114,6 +114,36 @@ def _append_unique_note(existing: str | None, label: str, value: Any, max_len: i
     return combined[:max_len] if combined else None
 
 
+def _strip_generated_member_memo(existing: str | None) -> str | None:
+    """과거 업로드 때 자동 생성된 주소/사업자/공문주소 메모는 제거하고,
+    실제 사람이 입력한 비고/미수금 비고만 남긴다.
+    """
+    current = _clean(existing)
+    if not current:
+        return None
+    keep: list[str] = []
+    for part in re.split(r"\s*/\s*", current):
+        p = part.strip()
+        if not p:
+            continue
+        if re.match(r"^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]", p):
+            continue
+        keep.append(p)
+    return " / ".join(keep)[:1800] if keep else None
+
+
+def _ledger_note(row: dict[str, Any]) -> str | None:
+    """회원원장 업로드에서는 주소 같은 기본정보를 메모에 넣지 않는다.
+    실제 비고류 칸만 따로 보존한다.
+    """
+    parts: list[str] = []
+    for k in ["비고", "비고2", "비고3", "전화 메모"]:
+        v = _clean(row.get(k))
+        if v:
+            parts.append(f"원장 {k}:{v}")
+    return " / ".join(parts)[:1000] if parts else None
+
+
 def _is_contact_problem_note(value: Any) -> bool:
     t = _clean(value).replace(" ", "").lower()
     if not t:
@@ -645,11 +675,7 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             byear = _birth_year(row.get("주민등록번호", ""))
             age = (date.today().year - byear) if byear else None
             amount = monthly_charge(membership, age=age, birth_year=byear)
-            memo_parts = []
-            for k in ["주소", "사업자등록번호", "소속업체", "공문 주소", "대리인", "구조변경", "비고", "전화 메모", "비고2", "비고3"]:
-                if row.get(k):
-                    memo_parts.append(f"{k}:{row[k]}")
-            memo = " / ".join(memo_parts)[:1000] or "엑셀 업로드 반영"
+            memo = _ledger_note(row)
             if existing:
                 m = existing
                 raw_mgmt = _clean(row.get("관리번호"))
@@ -674,7 +700,11 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 m.monthly_charge = amount
                 m.status = m.status or "정상"
                 m.cert_missing = cert_date is None
-                m.memo = memo
+                cleaned_memo = _strip_generated_member_memo(m.memo)
+                if memo:
+                    m.memo = _append_unique_note(cleaned_memo, "원장 비고", memo)
+                else:
+                    m.memo = cleaned_memo
                 updated += 1
             else:
                 while _next_member_id_from_no(next_no) in used_ids:
