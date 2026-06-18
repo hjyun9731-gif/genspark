@@ -109,7 +109,7 @@ def _memo_aliases(text: str | None) -> list[str]:
         part = re.sub(r"^(공|입금자|입금|이체|대리|대표)\s*[:：-]?", "", part.strip(), flags=re.I)
         # 띄어쓴 이름은 붙여서 비교하되, 표시용은 원문에 가깝게 보존한다.
         norm = _name_norm(part)
-        norm = re.sub(r"[()\[\]{}:：'"`~!@#$%^&*_+=<>?\-]", "", norm)
+        norm = re.sub(r'[()\[\]{}:：\'"`~!@#$%^&*_+=<>?\-]', "", norm)
         if len(norm) < 2 or norm.lower() in blocked:
             continue
         if norm not in [_name_norm(x) for x in out]:
