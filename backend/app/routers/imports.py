@@ -101,6 +101,56 @@ def _has_value(v: Any) -> bool:
     return bool(s) and s not in {"-", "–", "—"}
 
 
+def _append_unique_note(existing: str | None, label: str, value: Any, max_len: int = 1800) -> str | None:
+    note = _clean(value)
+    if not note:
+        return existing
+    part = f"{label}:{note}"
+    current = _clean(existing)
+    # 같은 미수금 비고를 여러 번 업로드해도 계속 중복 추가하지 않는다.
+    if part in current:
+        return current[:max_len] if current else None
+    combined = f"{current} / {part}" if current else part
+    return combined[:max_len] if combined else None
+
+
+def _strip_generated_member_memo(existing: str | None) -> str | None:
+    """과거 업로드 때 자동 생성된 주소/사업자/공문주소 메모는 제거하고,
+    실제 사람이 입력한 비고/미수금 비고만 남긴다.
+    """
+    current = _clean(existing)
+    if not current:
+        return None
+    keep: list[str] = []
+    for part in re.split(r"\s*/\s*", current):
+        p = part.strip()
+        if not p:
+            continue
+        if re.match(r"^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]", p):
+            continue
+        keep.append(p)
+    return " / ".join(keep)[:1800] if keep else None
+
+
+def _ledger_note(row: dict[str, Any]) -> str | None:
+    """회원원장 업로드에서는 주소 같은 기본정보를 메모에 넣지 않는다.
+    실제 비고류 칸만 따로 보존한다.
+    """
+    parts: list[str] = []
+    for k in ["비고", "비고2", "비고3", "전화 메모"]:
+        v = _clean(row.get(k))
+        if v:
+            parts.append(f"원장 {k}:{v}")
+    return " / ".join(parts)[:1000] if parts else None
+
+
+def _is_contact_problem_note(value: Any) -> bool:
+    t = _clean(value).replace(" ", "").lower()
+    if not t:
+        return False
+    return any(key in t for key in ["결번", "반송", "연락두절", "전화안됨", "주소불명", "문자발송x", "지로x,반송"])
+
+
 def _fix_reversed_future_date(d: date | None) -> date | None:
     """엑셀의 20.10.30 / 21.03.31 같은 날짜가 2030-10-20 / 2031-03-21로 뒤집힌 경우 보정."""
     if not d:
@@ -362,31 +412,25 @@ def _iter_license_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _arrears_header(ws) -> tuple[int, list[tuple[int, str]], dict[str, int]]:
-    """2026년회비내역 헤더를 실제 엑셀 열 번호와 함께 찾는다.
-
-    주의: 이전 코드는 빈 헤더칸을 건너뛴 뒤 enumerate(headers)를 사용해서
-    열 번호가 앞으로 당겨졌다. 그래서 AE열(6월 미수금)을 못 읽고 다른 칸/0원을
-    현재 미수금으로 반영하는 문제가 있었다.
-    headers는 반드시 (0-based column index, header text)로 보관한다.
-    """
+def _arrears_header(ws) -> tuple[int, list[str], dict[str, int]]:
     best = (1, [], {})
-    score_keys = ["지역", "계정", "차량번호", "성명", "이월금"]
-    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=120, values_only=True), start=1):
-        mapping: dict[str, int] = {}
-        headers: list[tuple[int, str]] = []
+    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=10, max_col=80, values_only=True), start=1):
+        mapping = {}
+        headers = []
         for i, v in enumerate(row, start=1):
             h = _clean(v)
             if not h:
                 continue
             h = re.sub(r"\s+", " ", h.replace("\n", " ")).strip()
-            headers.append((i - 1, h))
-            mapping[_norm_col(h)] = i - 1
-        if "차량번호" in mapping and "성명" in mapping:
+            headers.append(h)
+            # 같은 제목(특히 비고)이 여러 번 있을 수 있다.
+            # 미수금 파일의 입금자 별칭 비고는 앞쪽(계정 다음, 차량번호 앞) 비고이므로
+            # 뒤쪽 중복 비고가 앞쪽 비고를 덮어쓰지 않게 첫 번째 위치를 유지한다.
+            mapping.setdefault(_norm_col(h), i - 1)
+        if "차량번호" in mapping and ("성명" in mapping or "성명" in [_norm_col(x) for x in headers]):
             return row_no, headers, mapping
-        score = sum(1 for key in score_keys if key in mapping)
-        best_score = sum(1 for key in score_keys if key in best[2])
-        if score > best_score:
+        score = sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in mapping)
+        if score > sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in best[2]):
             best = (row_no, headers, mapping)
     return best
 
@@ -411,17 +455,10 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         "대수": idx("대수"), "이월금": idx("이월금"),
     }
     month_cols: dict[int, int] = {}
-    for col_idx, h in headers:
-        # 실제 열 번호를 유지한다. 예: 6월 미수금은 AE열(0-based 30)이어야 한다.
-        norm_h = _clean(h).replace(" ", "")
-        mm = re.search(r"(\d{1,2})월\s*미수금", norm_h)
+    for i, h in enumerate(headers):
+        mm = re.search(r"(\d{1,2})월\s*미수금", _clean(h).replace(" ", ""))
         if mm:
-            month_cols[int(mm.group(1))] = col_idx
-
-    # 2026미수금 운영 기준: 현재 반영 기준은 6월 미수금(AE열)이다.
-    # 헤더명이 깨져 감지되지 않을 때도 실제 양식의 AE열을 fallback으로 사용한다.
-    if 6 not in month_cols:
-        month_cols[6] = 30  # AE열, 0-based
+            month_cols[int(mm.group(1))] = i
 
     rows: list[dict[str, Any]] = []
     for row in ws.iter_rows(min_row=header_row_no + 1, max_col=80, values_only=True):
@@ -437,19 +474,10 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
             val = row[col] if col is not None and col < len(row) else None
             money = _money(val)
             monthly_values[f"{month}월 미수금"] = money
+            # 행별 마지막 입력 월: 0도 입력값이면 해당 월을 기준월로 본다.
             if _has_value(val):
                 last_month = month
                 current_amount = money
-
-        # 가장 중요: 2026년 현재 운영 기준은 AE열 '6월 미수금'이다.
-        # 뒤쪽 빈/0원 컬럼이나 잘못 당겨진 컬럼 때문에 김남진 같은 회원이 0원으로
-        # 들어가지 않도록 6월 미수금 값을 최우선으로 현재잔액에 반영한다.
-        june_col = month_cols.get(6, 30)
-        june_val = row[june_col] if june_col is not None and june_col < len(row) else None
-        if _has_value(june_val):
-            last_month = 6
-            current_amount = _money(june_val)
-            monthly_values["6월 미수금"] = current_amount
         out = {
             "지역": _clean(row[base["지역"]]) if base["지역"] is not None and base["지역"] < len(row) else "",
             "계정": _clean(row[base["계정"]]) if base["계정"] is not None and base["계정"] < len(row) else "",
@@ -650,11 +678,7 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             byear = _birth_year(row.get("주민등록번호", ""))
             age = (date.today().year - byear) if byear else None
             amount = monthly_charge(membership, age=age, birth_year=byear)
-            memo_parts = []
-            for k in ["주소", "사업자등록번호", "소속업체", "공문 주소", "대리인", "구조변경", "비고", "전화 메모", "비고2", "비고3"]:
-                if row.get(k):
-                    memo_parts.append(f"{k}:{row[k]}")
-            memo = " / ".join(memo_parts)[:1000] or "엑셀 업로드 반영"
+            memo = _ledger_note(row)
             if existing:
                 m = existing
                 raw_mgmt = _clean(row.get("관리번호"))
@@ -679,7 +703,11 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 m.monthly_charge = amount
                 m.status = m.status or "정상"
                 m.cert_missing = cert_date is None
-                m.memo = memo
+                cleaned_memo = _strip_generated_member_memo(m.memo)
+                if memo:
+                    m.memo = _append_unique_note(cleaned_memo, "원장 비고", memo)
+                else:
+                    m.memo = cleaned_memo
                 updated += 1
             else:
                 while _next_member_id_from_no(next_no) in used_ids:
@@ -738,6 +766,14 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 if len(unmatched) < 80:
                     unmatched.append(f"미매칭: {row['성명']} / {row['차량번호']} / {row.get('현재 미수금액', 0):,}원")
                 continue
+
+            # 2026미수금 파일의 비고는 회원 원장의 비고와 별개로 반드시 회원 메모에 합쳐 저장한다.
+            # 통장매칭 후보/수동검색에서 이 메모를 보여주고, 메모 속 이름도 매칭 근거로 사용하기 위함.
+            arrears_note = _clean(row.get("비고"))
+            if arrears_note:
+                member.memo = _append_unique_note(member.memo, "미수금 비고", arrears_note)
+                if _is_contact_problem_note(arrears_note):
+                    member.is_disconnected = True
 
             # 재업로드 시 해당 회원의 기존 미수 상세를 현재잔액 1건으로 교체한다.
             db.execute(delete(ReceivableItem).where(ReceivableItem.member_id == member.id))
