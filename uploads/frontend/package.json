@@ -1,0 +1,11 @@
+{
+  "name": "misugeum-frontend",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node build.mjs && echo 'static build — open backend/app/static/index.html'",
+    "build": "node build.mjs",
+    "preview": "node build.mjs"
+  }
+}
