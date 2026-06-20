@@ -1,0 +1,89 @@
+/* ============================================================
+   Payrole — Color tokens
+   Extracted from the Styleguide "Colors 1.0" frame.
+   ============================================================ */
+
+:root {
+  /* ---- Brand / primary ---------------------------------- */
+  --blue-500: #3981F7;   /* primary brand blue          */
+  --blue-600: #2D6FE0;   /* hover / pressed primary     */
+  --blue-700: #1F5BC4;   /* deep pressed                */
+  --ink-900:  #0A112F;   /* near-black navy ink         */
+  --ink-950:  #000929;   /* darkest navy (cards/CTA bg) */
+
+  /* ---- Shades of blue (tints) --------------------------- */
+  --blue-50:  #F5F9FF;
+  --blue-100: #EBF3FF;
+  --blue-150: #E0EDFF;
+  --blue-200: #D6E7FF;
+  --blue-250: #CEE0FD;
+  --blue-300: #93BAFB;   /* mid blue accent             */
+  --violet-100: #D8D6F5; /* soft violet tint            */
+  --violet-500: #7065F0; /* violet accent (type swatch) */
+
+  /* ---- Greyscale ---------------------------------------- */
+  --white:    #FFFFFF;
+  --grey-25:  #FAFAFA;
+  --grey-50:  #F4F4F5;
+  --grey-100: #ECECEC;
+  --grey-150: #E4E4E7;
+  --grey-200: #CACACE;
+  --grey-300: #9096A2;
+  --grey-400: #70707A;
+  --grey-500: #585860;
+  --grey-600: #44444B;
+  --grey-700: #313135;
+  --grey-900: #0B0B0C;
+
+  /* extra neutral text tones seen in product UI */
+  --slate-400: #9EA3AE;
+  --slate-500: #7B7B7B;
+  --slate-600: #627188;
+  --slate-700: #111827;
+
+  /* ---- Semantic / status -------------------------------- */
+  --green-500: #0AAF60;  /* success / positive          */
+  --green-50:  #E7F8EF;  /* success surface             */
+  --red-500:   #FA4545;  /* danger / negative           */
+  --red-50:    #FEECEC;  /* danger surface              */
+  --amber-500: #F5A623;  /* warning                     */
+  --amber-50:  #FEF4E4;  /* warning surface (alert)     */
+
+  /* ============================================================
+     Semantic aliases — reference these in components
+     ============================================================ */
+
+  /* text */
+  --text-primary:   var(--ink-900);
+  --text-secondary: var(--grey-400);
+  --text-tertiary:  var(--slate-400);
+  --text-muted:     var(--grey-300);
+  --text-on-brand:  var(--white);
+  --text-link:      var(--blue-500);
+  --text-success:   var(--green-500);
+  --text-danger:    var(--red-500);
+
+  /* surfaces */
+  --surface-page:    var(--white);
+  --surface-canvas:  var(--grey-25);
+  --surface-card:    var(--white);
+  --surface-sunken:  var(--grey-50);
+  --surface-brand:   var(--blue-500);
+  --surface-inverse: var(--ink-950);
+  --surface-info:    var(--blue-100);
+  --surface-success: var(--green-50);
+  --surface-danger:  var(--red-50);
+
+  /* borders */
+  --border-subtle:  var(--grey-100);
+  --border-default: var(--grey-150);
+  --border-strong:  var(--grey-200);
+  --border-brand:   var(--blue-500);
+  --border-focus:   var(--blue-300);
+
+  /* interactive brand */
+  --brand:          var(--blue-500);
+  --brand-hover:    var(--blue-600);
+  --brand-active:   var(--blue-700);
+  --brand-subtle:   var(--blue-100);
+}
