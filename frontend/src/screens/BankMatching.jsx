@@ -1,29 +1,26 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Card, PageHead, Badge, formatWon } from '../components.jsx'
 import { api } from '../api.js'
 
-
-const INCOME_ITEMS = [
-  { value: '협회비', label: '협회비', accounting: '회비수입', tone: 'lavender' },
-  { value: '관리비', label: '관리비', accounting: '회비수입', tone: 'sky' },
-  { value: '협회가입비', label: '협회가입비', accounting: '가수금', tone: 'pink' },
-  { value: '자격증명발급비', label: '자격증명발급비', accounting: '잡수입', tone: 'yellow' },
-  { value: '기타', label: '기타', accounting: '기타수입', tone: 'green' },
+const INCOME_ACTIONS = [
+  { value: null, label: '회비반영' },
+  { value: '협회가입비', label: '가수금' },
+  { value: '자격증명발급비', label: '잡수입' },
+  { value: '기타', label: '기타' },
 ]
 
-function accountingType(item){
-  return INCOME_ITEMS.find(x => x.value === item)?.accounting || '회비수입'
-}
 
-function inferChargeItem(member, deposit){
-  const text = normalizeText([deposit?.depositorName, deposit?.memo, deposit?.description].join(' '))
-  if(text.includes('가입비') || text.includes('협회가입') || text.includes('신규가입')) return '협회가입비'
-  if(text.includes('자격증명') || text.includes('발급비') || text.includes('재발급')) return '자격증명발급비'
-  return member?.chargeItem || member?.charge_item || '관리비'
-}
+const INCOME_ONLY_ACTIONS = [
+  { value: '협회가입비', label: '가수금' },
+  { value: '자격증명발급비', label: '잡수입' },
+  { value: '기타', label: '기타' },
+]
 
-function itemTone(item){
-  return INCOME_ITEMS.find(x => x.value === item)?.tone || 'soft'
+function IncomeOnlyButtons({deposit, onIncome}){
+  if(!deposit || ['매칭완료','반영완료','제외'].includes(getStatus(deposit))) return null
+  return <div className="income-only-actions">
+    {INCOME_ONLY_ACTIONS.map(a => <button key={a.value} className="btn mini income-soft" onClick={()=>onIncome(deposit.id, a.value)}>{a.label}</button>)}
+  </div>
 }
 
 const STATUS_TONE = {
@@ -53,6 +50,14 @@ function getBestCandidate(d, members){
   return d.bestCandidate || (d.candidateId ? members.find(m => m.id === d.candidateId) : null)
 }
 
+function memberMemo(m){
+  return m?.memo || m?.note || m?.remark || m?.remarks || ''
+}
+
+function getGroupCandidate(d){
+  return d?.groupCandidate || (d?.groupCandidates && d.groupCandidates[0]) || null
+}
+
 function normalizeText(v){
   return String(v || '').replace(/\s+/g, '').toLowerCase()
 }
@@ -71,21 +76,48 @@ function DepositDetail({deposit}){
         <div><b>거래내용</b><span>{deposit.description || deposit.transactionType || '-'}</span></div>
         <div><b>원본구분</b><span>{deposit.sourceType || deposit.source || '-'}</span></div>
         <div><b>입금자/기록</b><span>{deposit.depositorName || deposit.rawName || '-'}</span></div>
+        <div><b>매칭메모</b><span>{deposit.hint || '-'}</span></div>
       </div>
     </td>
   </tr>
 }
 
-function ManualMatchModal({deposit, members, onClose, onMatch}){
+function ManualMatchModal({deposit, members, onClose, onMatch, onGroupMatch, onIncome}){
   const [q,setQ]=useState('')
-  const [chargeItem,setChargeItem]=useState(()=>inferChargeItem(deposit?.bestCandidate, deposit))
+  const [serverRows,setServerRows]=useState([])
+  const [loading,setLoading]=useState(false)
   const candidates = deposit?.candidates || []
+  const groupCandidates = deposit?.groupCandidates || (deposit?.groupCandidate ? [deposit.groupCandidate] : [])
+
+  useEffect(()=>{
+    let alive = true
+    async function run(){
+      const keyword = q.trim()
+      if(!keyword){ setServerRows([]); return }
+      setLoading(true)
+      try{
+        const rows = await api.listMembers({q:keyword, status:'정상', size:1000})
+        if(alive) setServerRows(Array.isArray(rows) ? rows : [])
+      }catch(e){ if(alive) setServerRows([]) }
+      finally{ if(alive) setLoading(false) }
+    }
+    const t = setTimeout(run, 200)
+    return ()=>{ alive=false; clearTimeout(t) }
+  },[q])
+
   const memberRows = useMemo(()=>{
-    const base = (members || []).filter(m => m.status === '정상')
-    if(!q.trim()) return base.slice(0, 100)
-    const s = normalizeText(q)
-    return base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone].join('')).includes(s)).slice(0,100)
-  },[members,q])
+    const keyword = q.trim()
+    const s = normalizeText(keyword)
+    const source = keyword ? serverRows : (members || [])
+    const base = (source || []).filter(m => m.status === '정상')
+    const filtered = keyword ? base.filter(m => normalizeText([m.name, m.vehicleNo, m.vehicle_no, m.mgmtNo, m.mgmt_no, m.phone, memberMemo(m)].join(' ')).includes(s)) : base
+    return filtered.sort((a,b)=>{
+      const an=normalizeText(a.name), bn=normalizeText(b.name)
+      const av=normalizeText([a.vehicleNo,a.vehicle_no].join(' ')), bv=normalizeText([b.vehicleNo,b.vehicle_no].join(' '))
+      const score=(m,n,v)=> n===s?0:n.startsWith(s)?1:v.includes(s)?2:normalizeText(memberMemo(m)).includes(s)?3:4
+      return score(a,an,av)-score(b,bn,bv) || (Number(b.totalArrears)||0)-(Number(a.totalArrears)||0)
+    }).slice(0,100)
+  },[members,serverRows,q])
   if(!deposit) return null
   return <div className="modal-bg">
     <div className="modal wide match-modal">
@@ -103,29 +135,43 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
         <div><b>거래일자</b><strong>{deposit.depositDate || '-'}</strong></div>
         <div><b>상태</b><strong><StatusBadge status={getStatus(deposit)}/></strong></div>
       </div>
-      <div className="income-select-panel">
+
+      <div className="income-only-panel">
         <div>
-          <b>수납항목</b>
-          <p>협회가입비/자격증명발급비는 미수금 차감 없이 수납내역에만 기록됩니다.</p>
+          <b>회원 없이 처리</b>
+          <span>자격증명발급비·가입비·기타 입금은 미수금 차감 없이 통장내역만 완료처리합니다.</span>
         </div>
-        <select className="select" value={chargeItem} onChange={e=>setChargeItem(e.target.value)}>
-          {INCOME_ITEMS.map(item => <option key={item.value} value={item.value}>{item.label} · {item.accounting}</option>)}
-        </select>
-        <Badge tone={itemTone(chargeItem)}>{accountingType(chargeItem)}</Badge>
+        <IncomeOnlyButtons deposit={deposit} onIncome={onIncome} />
       </div>
+
+      {groupCandidates.length ? <>
+        <div className="section-title compact-title">묶음수납 후보 <span>허장덕 · 조철만 · 주신평 · 합동/화물유지계약</span></div>
+        <div className="admin-table-wrap modal-table-scroll">
+          <table className="admin-table dense"><thead><tr><th>묶음</th><th>대상</th><th className="right">예상금액</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
+            {groupCandidates.map(g=><tr key={g.code || g.title}>
+              <td><b>{g.title}</b><br/><span className="tiny muted">{g.reason}</span></td>
+              <td>{g.resolvedCount}/{g.targetCount}명 확인</td>
+              <td className="right money">{formatWon(g.expectedAmount)}</td>
+              <td className="right">{diffText(g.diff)}</td>
+              <td><button className="btn mini green" onClick={()=>onGroupMatch(deposit.id, g.code)}>묶음반영</button></td>
+            </tr>)}
+          </tbody></table>
+        </div>
+      </> : null}
 
       {candidates.length ? <>
         <div className="section-title compact-title">추천 후보</div>
         <div className="admin-table-wrap modal-table-scroll">
-          <table className="admin-table dense"><thead><tr><th>회원</th><th>차량번호</th><th>관리번호</th><th>매칭근거</th><th className="right">현재미수</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
+          <table className="admin-table dense"><thead><tr><th>회원</th><th>차량번호</th><th>관리번호</th><th>비고/메모</th><th>매칭근거</th><th className="right">현재미수</th><th className="right">차액</th><th>처리</th></tr></thead><tbody>
             {candidates.map(c=><tr key={c.id}>
               <td><b>{c.name}</b></td>
               <td>{c.vehicleNo || c.vehicle_no || '-'}</td>
               <td>{c.mgmtNo || c.mgmt_no || '-'}</td>
+              <td className="muted-cell memo-cell">{shortText(memberMemo(c) || '-', 40)}</td>
               <td className="muted-cell">{shortText(c.reason || c.reasons?.join(' · ') || '-', 52)}</td>
               <td className="right money">{formatWon(c.totalArrears || c.arrears_amount)}</td>
               <td className="right">{diffText(c.diff)}</td>
-              <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, c.id, chargeItem)}>반영</button></td>
+              <td className="action-cell">{INCOME_ACTIONS.map(a => <button key={a.label} className={a.value ? 'btn mini soft' : 'btn mini green'} onClick={()=>onMatch(deposit.id, c.id, a.value)}>{a.label}</button>)}</td>
             </tr>)}
           </tbody></table>
         </div>
@@ -134,17 +180,19 @@ function ManualMatchModal({deposit, members, onClose, onMatch}){
       <div className="section-title compact-title">회원 검색</div>
       <input className="input full" value={q} onChange={e=>setQ(e.target.value)} placeholder="이름 / 차량번호 / 관리번호 / 전화번호 검색" />
       <div className="admin-table-wrap modal-table-scroll mt8">
-        <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
+        <table className="admin-table dense"><thead><tr><th>이름</th><th>지역</th><th>차량번호</th><th>관리번호</th><th>구분</th><th>비고/메모</th><th className="right">현재미수</th><th>처리</th></tr></thead><tbody>
           {memberRows.map(m=><tr key={m.id}>
             <td><b>{m.name}</b></td>
             <td>{m.sigun || '-'}</td>
             <td>{m.vehicleNo || m.vehicle_no || '-'}</td>
             <td>{m.mgmtNo || m.mgmt_no || '-'}</td>
             <td>{m.membership || '-'}</td>
+            <td className="muted-cell memo-cell">{shortText(memberMemo(m) || '-', 34)}</td>
             <td className="right money">{formatWon(m.totalArrears)}</td>
-            <td><button className="btn mini green" onClick={()=>onMatch(deposit.id, m.id, chargeItem)}>선택</button></td>
+            <td className="action-cell">{INCOME_ACTIONS.map(a => <button key={a.label} className={a.value ? 'btn mini soft' : 'btn mini green'} onClick={()=>onMatch(deposit.id, m.id, a.value)}>{a.label}</button>)}</td>
           </tr>)}
-          {!memberRows.length && <tr><td colSpan={7} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
+          {loading && <tr><td colSpan={8} className="empty-cell compact">검색 중...</td></tr>}
+          {!loading && !memberRows.length && <tr><td colSpan={8} className="empty-cell compact">검색 결과가 없습니다.</td></tr>}
         </tbody></table>
       </div>
     </div>
@@ -223,7 +271,7 @@ function PasteDepositModal({onClose, onSaved}){
   </div>
 }
 
-export default function BankMatching({data, matchDeposit, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
+export default function BankMatching({data, matchDeposit, matchDepositGroup, excludeDeposit, resetPendingDeposits, navigate, reloadFromDb}){
   const [q,setQ]=useState('')
   const [status,setStatus]=useState('전체')
   const [resetKey,setResetKey]=useState(0)
@@ -232,6 +280,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const [openId,setOpenId]=useState(null)
   const [page,setPage]=useState(1)
   const pageSize = 50
+  const [autoApplying,setAutoApplying]=useState(false)
 
   const deposits = data.deposits || []
   const members = data.members || []
@@ -251,7 +300,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
   const rows=useMemo(()=>{
     return deposits.filter(d=>{
       const best = getBestCandidate(d, members)
-      const text=normalizeText([d.depositorName,d.memo,d.description,d.status,d.matchStatus,best?.name,best?.vehicleNo,best?.vehicle_no,best?.mgmtNo,best?.mgmt_no].join(' '))
+      const text=normalizeText([d.depositorName,d.memo,d.description,d.status,d.matchStatus,best?.name,best?.vehicleNo,best?.vehicle_no,best?.mgmtNo,best?.mgmt_no,memberMemo(best),d.hint].join(' '))
       const okQ=!q.trim() || text.includes(normalizeText(q))
       const st=getStatus(d)
       const okS=status==='전체' || st===status || (status==='처리대기' && !['매칭완료','제외'].includes(st)) || (status==='확인필요' && ['후보확인','중복후보'].includes(st))
@@ -270,13 +319,47 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
     setModal(null)
   }
 
+  async function doGroupMatch(depositId, groupCode=null){
+    await matchDepositGroup?.(depositId, groupCode)
+    setModal(null)
+  }
+
+  async function doIncomeOnly(depositId, chargeItem){
+    const label = chargeItem === '협회가입비' ? '가수금' : chargeItem === '자격증명발급비' ? '잡수입' : '기타수입'
+    if(!confirm(`이 입금건을 ${label}으로 처리할까요?
+회원 미수금은 차감하지 않고 통장내역만 완료 처리합니다.`)) return
+    await api.matchDepositIncome(depositId, {charge_item: chargeItem})
+    setModal(null)
+    await reloadFromDb?.()
+  }
+
   const handleAutoAll = async () => {
     const targets = rows.filter(d => getStatus(d) === '자동매칭' && getBestCandidate(d, members))
     if(!targets.length) return alert('자동매칭 대상이 없습니다.')
     if(!confirm(`자동매칭 ${targets.length}건을 수납 반영할까요?\n반영 전 후보가 맞는지 확인하세요.`)) return
-    for(const d of targets){
-      const best = getBestCandidate(d, members)
-      await matchDeposit(d.id, best.id, inferChargeItem(best, d))
+    setAutoApplying(true)
+    try{
+      // 여러 건을 브라우저에서 1건씩 연속 호출하면 화면이 멈추거나 빈 화면처럼 보일 수 있어
+      // 서버 일괄 반영 API를 우선 사용하고, 없으면 기존 개별 반영으로 fallback 한다.
+      if(api.autoMatchAllDeposits){
+        const res = await api.autoMatchAllDeposits()
+        await reloadFromDb?.()
+        alert(`자동매칭 반영 완료: ${res.matched || 0}건${res.skipped ? ` / 제외 ${res.skipped}건` : ''}`)
+      }else{
+        let ok = 0
+        for(const d of targets){
+          const best = getBestCandidate(d, members)
+          if(!best) continue
+          await matchDeposit(d.id, best.id)
+          ok += 1
+        }
+        await reloadFromDb?.()
+        alert(`자동매칭 반영 완료: ${ok}건`)
+      }
+    }catch(e){
+      alert(e.message || '자동매칭 전체 반영 중 오류가 발생했습니다.')
+    }finally{
+      setAutoApplying(false)
     }
   }
 
@@ -304,7 +387,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
     <PageHead title="통장매칭" desc="입금자명·입금액·거래기록을 회원 미수금과 대조해 수납으로 반영합니다.">
       <button className="btn soft" onClick={()=>navigate?.('import')}>거래내역 업로드</button>
       <button className="btn soft paste-btn" onClick={()=>setShowPaste(true)}>붙여넣기 입력</button>
-      <button className="btn green" onClick={handleAutoAll}>자동매칭 전체 반영</button>
+      <button className="btn green" disabled={autoApplying} onClick={handleAutoAll}>{autoApplying ? '반영 중...' : '자동매칭 전체 반영'}</button>
       <button className="btn danger-soft" onClick={resetResults}>매칭결과 초기화</button>
     </PageHead>
 
@@ -347,12 +430,13 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
           </thead>
           <tbody>
             {pageRows.map(d=>{
+              const group=getGroupCandidate(d)
               const best=getBestCandidate(d, members)
               const st=getStatus(d)
               const done=['매칭완료','제외'].includes(st)
               const amount = Number(d.amount)||0
-              const arrears = Number(best?.totalArrears || best?.arrears_amount || d.currentArrears || 0)
-              const diff = best ? (best.diff ?? d.difference ?? amount - arrears) : null
+              const arrears = Number(group?.expectedAmount || best?.totalArrears || best?.arrears_amount || d.currentArrears || 0)
+              const diff = group ? group.diff : best ? (best.diff ?? d.difference ?? amount - arrears) : null
               const isOpen = openId === d.id
               return <React.Fragment key={d.id}>
                 <tr className={done ? 'muted-row' : ''}>
@@ -361,12 +445,14 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
                   <td className="clip-cell" title={d.memo || d.description || ''}>{shortText(d.memo || d.description || '-', 46)}</td>
                   <td className="right money nowrap">{formatWon(amount)}</td>
                   <td><StatusBadge status={st}/>{d.candidateCount>1 && <div className="tiny muted">후보 {d.candidateCount}명</div>}</td>
-                  <td><b>{best?.name || '-'}</b><div className="tiny muted">{best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div></td>
-                  <td className="nowrap">{best?.vehicleNo || best?.vehicle_no || '-'}</td>
-                  <td className="right nowrap"><b>{best ? formatWon(arrears) : '-'}</b><div className="tiny muted">{best ? diffText(diff) : '-'}</div></td>
+                  <td><b>{group ? group.title : best?.name || '-'}</b><div className="tiny muted">{group ? `묶음 ${group.resolvedCount}/${group.targetCount}명` : best ? (best.mgmtNo || best.mgmt_no || '') : '수동매칭 필요'}</div>{!group && best && memberMemo(best) && <div className="tiny memo-line">{shortText(memberMemo(best), 38)}</div>}{d.hint && <div className="tiny muted">{shortText(d.hint, 38)}</div>}</td>
+                  <td className="nowrap">{group ? '대납자 묶음' : best?.vehicleNo || best?.vehicle_no || '-'}</td>
+                  <td className="right nowrap"><b>{(group || best) ? formatWon(arrears) : '-'}</b><div className="tiny muted">{(group || best) ? diffText(diff) : '-'}</div></td>
                   <td className="action-cell left">
-                    {!done && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id, inferChargeItem(best, d))}>반영</button>}
+                    {!done && group && <button className="btn mini green" onClick={()=>doGroupMatch(d.id, group.code)}>묶음반영</button>}
+                    {!done && !group && <button className="btn mini green" disabled={!best} onClick={()=>doMatch(d.id, best.id)}>반영</button>}
                     {!done && <button className="btn mini soft" onClick={()=>setModal(d)}>{best?'후보':'수동'}</button>}
+                    {!done && !best && !group && <IncomeOnlyButtons deposit={d} onIncome={doIncomeOnly} />}
                     {!done && <button className="btn mini" onClick={()=>excludeDeposit(d.id)}>제외</button>}
                     <button className="btn mini" onClick={()=>setOpenId(isOpen?null:d.id)}>{isOpen?'닫기':'원문'}</button>
                     {done && <span className="tiny muted">완료</span>}
@@ -387,7 +473,7 @@ export default function BankMatching({data, matchDeposit, excludeDeposit, resetP
         </div>
       </div>
     </Card>
-    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch}/>
+    <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)} onMatch={doMatch} onGroupMatch={doGroupMatch} onIncome={doIncomeOnly}/>
     {showPaste && <PasteDepositModal onClose={()=>setShowPaste(false)} onSaved={reloadFromDb}/>}
   </div>
 }
