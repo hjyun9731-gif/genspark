@@ -37,28 +37,6 @@ def _date_iso(d: date | None) -> str | None:
     return fixed.isoformat() if fixed else None
 
 
-NON_ARREARS_INCOME_ITEMS = {"협회가입비", "자격증명발급비", "기타"}
-
-
-def _accounting_type(charge_item: str | None) -> str:
-    if charge_item == "협회가입비":
-        return "가수금"
-    if charge_item == "자격증명발급비":
-        return "잡수입"
-    if charge_item == "기타":
-        return "기타수입"
-    return "회비수입"
-
-
-def _is_non_arrears_income(charge_item: str | None) -> bool:
-    return (charge_item or "") in NON_ARREARS_INCOME_ITEMS
-
-
-def _ym_from_date(d: date | None) -> str:
-    d = d or date.today()
-    return d.strftime("%Y-%m")
-
-
 def _open_items(member: Member) -> list[ReceivableItem]:
     return sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount > 0], key=lambda x: x.ym)
 
@@ -66,13 +44,9 @@ def _open_items(member: Member) -> list[ReceivableItem]:
 def _member_dict(member: Member, detail: bool = False) -> dict:
     open_items = _open_items(member)  # 실제 수납 처리 대상: 양수 미수항목만
     balance_items = sorted([x for x in member.receivable_items if (not x.is_paid) and x.amount != 0], key=lambda x: x.ym)
+    paid_items = [x for x in member.receivable_items if x.is_paid]
     # 미수금명단 표시용 현재잔액: 0원/선입금(-금액)도 회원이 사라지면 안 되므로 음수까지 반영한다.
     arrears_amount = sum(x.amount for x in balance_items)
-    # 화면 혼동 방지용: 엑셀/원장 기준 미수, 실제 수납합계, 현재잔액을 분리해서 내려준다.
-    # 예: 김남진 원장미수 150,000원 + 통장매칭 수납 150,000원 = 현재잔액 0원.
-    arrears_payments = [p for p in member.payments if not _is_non_arrears_income(p.charge_item)]
-    paid_total = sum(int(p.amount or 0) for p in arrears_payments)
-    ledger_arrears = arrears_amount + paid_total
     out = {
         # DB 원본 필드
         "id": member.id,
@@ -113,12 +87,6 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         "arrears_amount": arrears_amount,
         "arrearsMonths": len(open_items),
         "totalArrears": arrears_amount,
-        "current_balance": arrears_amount,
-        "currentBalance": arrears_amount,
-        "ledger_arrears": ledger_arrears,
-        "ledgerArrears": ledger_arrears,
-        "paid_total": paid_total,
-        "paidTotal": paid_total,
         "age": (date.today().year - member.birth_year) if member.birth_year else None,
         "updatedAt": member.updated_at.isoformat() if member.updated_at else "",
     }
@@ -132,7 +100,7 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
             for x in sorted(member.receivable_items, key=lambda x: x.ym)
         ]
         out["payments"] = [
-            {"id": p.id, "memberId": p.member_id, "paid_for_ym": p.paid_for_ym, "paidForYm": p.paid_for_ym, "charge_item": p.charge_item, "chargeItem": p.charge_item, "accounting_type": _accounting_type(p.charge_item), "accountingType": _accounting_type(p.charge_item), "amount": p.amount, "method": p.method, "paid_date": p.paid_date.isoformat(), "paidDate": p.paid_date.isoformat(), "deposit_id": p.deposit_id, "memo": f"{p.method} 반영"}
+            {"id": p.id, "memberId": p.member_id, "paid_for_ym": p.paid_for_ym, "paidForYm": p.paid_for_ym, "charge_item": p.charge_item, "chargeItem": p.charge_item, "amount": p.amount, "method": p.method, "paid_date": p.paid_date.isoformat(), "paidDate": p.paid_date.isoformat()}
             for p in sorted(member.payments, key=lambda p: p.paid_date, reverse=True)
         ]
     else:
@@ -253,30 +221,36 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
     member = db.scalar(stmt)
     if member is None:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-    remain = int(payload.amount or 0)
+    remain = payload.amount
     if remain <= 0:
         raise HTTPException(status_code=400, detail="수납액은 0원보다 커야 합니다.")
 
-    charge_item = payload.charge_item or member.charge_item or "관리비"
-    paid_date = payload.paid_date or date.today()
-
-    # 협회가입비(가수금), 자격증명발급비(잡수입), 기타는 미수금 차감 없이 수납내역만 남긴다.
-    if _is_non_arrears_income(charge_item):
-        paid_for_ym = payload.paid_for_ym or _ym_from_date(paid_date)
-        db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
-        db.add(MemberHistory(member_id=member.id, content=f"{charge_item}({_accounting_type(charge_item)}) 수납 {remain:,}원 / 미수금 차감 없음", actor="system"))
+    # 가수금/잡수입/기타 등 '기록만' 항목: 미수금 차감 없이 수납내역 1건만 남긴다.
+    if payload.deduct is False:
+        item_label = payload.charge_item or "기타"
+        db.add(Payment(
+            member_id=member.id,
+            paid_for_ym=(payload.paid_date or date.today()).strftime("%Y-%m"),
+            charge_item=item_label,
+            amount=remain,
+            method=payload.method,
+            paid_date=payload.paid_date or date.today(),
+            deposit_id=payload.deposit_id,
+        ))
+        db.add(MemberHistory(member_id=member.id, content=f"{item_label} 수납 {remain:,}원 (미수금 미차감)", actor="system"))
         db.commit()
-        return {"ok": True, "paid_count": 0, "applied": remain, "remain": 0, "non_arrears": True, "accounting_type": _accounting_type(charge_item), "member": get_member(member_id, db)}
+        return {"ok": True, "paid_count": 0, "applied": remain, "remain": 0, "member": get_member(member_id, db)}
 
     paid_count = 0
     applied = 0
+    item_override = payload.charge_item
     for item in _open_items(member):
         if remain <= 0:
             break
         pay_amount = min(remain, item.amount)
         if pay_amount <= 0:
             continue
-        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
+        db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item_override or item.charge_item, amount=pay_amount, method=payload.method, paid_date=payload.paid_date or date.today(), deposit_id=payload.deposit_id))
         applied += pay_amount
         remain -= pay_amount
         if pay_amount >= item.amount:
@@ -285,17 +259,7 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
         else:
             item.amount -= pay_amount
         member.last_payment_ym = item.ym
-
-    # 미수 없는 회원/초과납부도 가능하다. 남은 금액은 선납(-현재잔액)으로 기록해 명단에서 확인되게 한다.
-    if remain > 0:
-        paid_for_ym = payload.paid_for_ym or _ym_from_date(paid_date)
-        db.add(Payment(member_id=member.id, paid_for_ym=paid_for_ym, charge_item=charge_item, amount=remain, method=payload.method, paid_date=paid_date, deposit_id=payload.deposit_id))
-        db.add(ReceivableItem(member_id=member.id, ym=paid_for_ym, charge_item=charge_item, amount=-remain, is_paid=False))
-        applied += remain
-        db.add(MemberHistory(member_id=member.id, content=f"{charge_item} 선납/초과입금 {remain:,}원 / 현재잔액 -{remain:,}원", actor="system"))
-        remain = 0
-    else:
-        db.add(MemberHistory(member_id=member.id, content=f"수납 반영 {applied:,}원 / 미수항목 {paid_count}건 완납", actor="system"))
+    db.add(MemberHistory(member_id=member.id, content=f"수납 반영 {applied:,}원 / 미수항목 {paid_count}건 완납", actor="system"))
     db.commit()
     return {"ok": True, "paid_count": paid_count, "applied": applied, "remain": remain, "member": get_member(member_id, db)}
 

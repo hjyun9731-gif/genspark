@@ -1,32 +1,19 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 
-function isMobileDevice() {
-  if (typeof window === 'undefined') return false
-  const ua = navigator.userAgent || ''
-  const touch = navigator.maxTouchPoints && navigator.maxTouchPoints > 1
-  const small = window.matchMedia && window.matchMedia('(max-width: 760px)').matches
-  const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
-  const forceDesktop = new URLSearchParams(window.location.search).get('view') === 'desktop'
-  const forceMobile = new URLSearchParams(window.location.search).get('view') === 'mobile' || window.location.hash === '#mobile'
-  if (forceDesktop) return false
-  if (forceMobile) return true
-  return mobileUa || (touch && small)
-}
+// 라우트 분리: '/mobile' 경로는 모바일 전용 PWA, 그 외는 데스크톱 업무관리 시스템.
+// (백엔드 SPA 폴백이 모든 경로에 index.html을 돌려주므로 별도 라우터 불필요)
+const isMobile = window.location.pathname.replace(/\/+$/, '').toLowerCase().endsWith('/mobile')
+  || window.location.pathname.toLowerCase().startsWith('/mobile')
 
-async function boot() {
-  const root = ReactDOM.createRoot(document.getElementById('root'))
-  if (isMobileDevice()) {
-    // 모바일은 데스크톱 App/styles.css를 아예 import하지 않는다.
-    // 데스크톱 CSS가 모바일 화면을 망가뜨리는 문제를 막기 위해 완전 분리한다.
-    const mod = await import('./mobile/MobileStandalone.jsx')
-    const MobileStandalone = mod.default
-    root.render(<MobileStandalone />)
-  } else {
-    const mod = await import('./App.jsx')
-    const App = mod.default
+const root = ReactDOM.createRoot(document.getElementById('root'))
+
+if (isMobile) {
+  import('./mobile/MobileApp.jsx').then(({ default: MobileApp }) => {
+    root.render(<MobileApp />)
+  })
+} else {
+  import('./App.jsx').then(({ default: App }) => {
     root.render(<App />)
-  }
+  })
 }
-
-boot()
