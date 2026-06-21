@@ -80,16 +80,6 @@ def _person_name(v: Any) -> str:
     return re.sub(r"\s+", "", _clean(v))
 
 
-def _name_key(v: Any) -> str:
-    """회원명/엑셀명 비교용. ㈜, (주), 대표 표기 등 회사명 주변 기호를 줄인다."""
-    s = _person_name(v).upper()
-    s = s.replace("㈜", "주")
-    s = s.replace("（주）", "주").replace("(주)", "주").replace("주식회사", "주")
-    s = re.sub(r"대표[:：]?", "", s)
-    s = re.sub(r"[^0-9A-Z가-힣]", "", s)
-    return s
-
-
 def _clip(v: Any, n: int) -> str | None:
     s = _clean(v)
     return s[:n] if s else None
@@ -109,6 +99,56 @@ def _money(v: Any) -> int:
 def _has_value(v: Any) -> bool:
     s = _clean(v)
     return bool(s) and s not in {"-", "–", "—"}
+
+
+def _append_unique_note(existing: str | None, label: str, value: Any, max_len: int = 1800) -> str | None:
+    note = _clean(value)
+    if not note:
+        return existing
+    part = f"{label}:{note}"
+    current = _clean(existing)
+    # 같은 미수금 비고를 여러 번 업로드해도 계속 중복 추가하지 않는다.
+    if part in current:
+        return current[:max_len] if current else None
+    combined = f"{current} / {part}" if current else part
+    return combined[:max_len] if combined else None
+
+
+def _strip_generated_member_memo(existing: str | None) -> str | None:
+    """과거 업로드 때 자동 생성된 주소/사업자/공문주소 메모는 제거하고,
+    실제 사람이 입력한 비고/미수금 비고만 남긴다.
+    """
+    current = _clean(existing)
+    if not current:
+        return None
+    keep: list[str] = []
+    for part in re.split(r"\s*/\s*", current):
+        p = part.strip()
+        if not p:
+            continue
+        if re.match(r"^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]", p):
+            continue
+        keep.append(p)
+    return " / ".join(keep)[:1800] if keep else None
+
+
+def _ledger_note(row: dict[str, Any]) -> str | None:
+    """회원원장 업로드에서는 주소 같은 기본정보를 메모에 넣지 않는다.
+    실제 비고류 칸만 따로 보존한다.
+    """
+    parts: list[str] = []
+    for k in ["비고", "비고2", "비고3", "전화 메모"]:
+        v = _clean(row.get(k))
+        if v:
+            parts.append(f"원장 {k}:{v}")
+    return " / ".join(parts)[:1000] if parts else None
+
+
+def _is_contact_problem_note(value: Any) -> bool:
+    t = _clean(value).replace(" ", "").lower()
+    if not t:
+        return False
+    return any(key in t for key in ["결번", "반송", "연락두절", "전화안됨", "주소불명", "문자발송x", "지로x,반송"])
 
 
 def _fix_reversed_future_date(d: date | None) -> date | None:
@@ -383,7 +423,10 @@ def _arrears_header(ws) -> tuple[int, list[str], dict[str, int]]:
                 continue
             h = re.sub(r"\s+", " ", h.replace("\n", " ")).strip()
             headers.append(h)
-            mapping[_norm_col(h)] = i - 1
+            # 같은 제목(특히 비고)이 여러 번 있을 수 있다.
+            # 미수금 파일의 입금자 별칭 비고는 앞쪽(계정 다음, 차량번호 앞) 비고이므로
+            # 뒤쪽 중복 비고가 앞쪽 비고를 덮어쓰지 않게 첫 번째 위치를 유지한다.
+            mapping.setdefault(_norm_col(h), i - 1)
         if "차량번호" in mapping and ("성명" in mapping or "성명" in [_norm_col(x) for x in headers]):
             return row_no, headers, mapping
         score = sum(1 for key in ["지역", "계정", "차량번호", "성명", "이월금"] if key in mapping)
@@ -411,20 +454,11 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         "차량번호": idx("차량번호"), "성명": idx("성명", "성 명", "성     명"),
         "대수": idx("대수"), "이월금": idx("이월금"),
     }
-    # 미수금 엑셀은 중간에 같은 이름의 빈/중복 헤더가 많다.
-    # headers 리스트는 빈칸을 제외하고 압축되어 실제 엑셀 열 번호와 달라지므로
-    # 반드시 _arrears_header에서 만든 원본 열 인덱스(mapping)를 사용한다.
     month_cols: dict[int, int] = {}
-    for norm_header, zero_idx in m.items():
-        mm = re.fullmatch(r"(\d{1,2})월미수금", norm_header)
+    for i, h in enumerate(headers):
+        mm = re.search(r"(\d{1,2})월\s*미수금", _clean(h).replace(" ", ""))
         if mm:
-            month_cols[int(mm.group(1))] = zero_idx
-    # 2026년회비내역 기준 6월 미수금은 AE열(31번째, zero-index 30).
-    # 헤더 병합/공백으로 탐지 실패할 때도 6월은 반드시 AE열을 우선한다.
-    if ws.max_column >= 31:
-        ae_header = _norm_col(ws.cell(row=header_row_no, column=31).value)
-        if ae_header == "6월미수금" or 6 not in month_cols:
-            month_cols[6] = 30
+            month_cols[int(mm.group(1))] = i
 
     rows: list[dict[str, Any]] = []
     for row in ws.iter_rows(min_row=header_row_no + 1, max_col=80, values_only=True):
@@ -525,48 +559,27 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member], dict[str, Member | None]]:
+def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member]]:
     by_vehicle: dict[str, Member] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
-    by_last4_unique: dict[str, Member | None] = {}
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
             by_vehicle[vn] = member
         last4 = _vehicle_last4(member.vehicle_no)
-        nm = _name_key(member.name)
+        nm = _person_name(member.name)
         if nm and last4:
             by_name_last4[(nm, last4)] = member
-        if last4:
-            if last4 in by_last4_unique and by_last4_unique[last4] is not member:
-                by_last4_unique[last4] = None
-            else:
-                by_last4_unique[last4] = member
-    return by_vehicle, by_name_last4, by_last4_unique
+    return by_vehicle, by_name_last4
 
 
-def _find_member_from_maps(
-    by_vehicle: dict[str, Member],
-    by_name_last4: dict[tuple[str, str], Member],
-    by_last4_unique: dict[str, Member | None],
-    name: str,
-    vehicle_no: str,
-) -> Member | None:
+def _find_member_from_maps(by_vehicle: dict[str, Member], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
     vn = _vehicle_norm(vehicle_no)
-    last4 = _vehicle_last4(vehicle_no)
-    # 1) 완전 차량번호 일치
     if vn and vn in by_vehicle:
         return by_vehicle[vn]
-    # 2) 이름 정규화 + 차량 뒤4자리 일치
-    key = (_name_key(name), last4)
-    if key[0] and key[1] and key in by_name_last4:
-        return by_name_last4[key]
-    # 3) 2026미수금 파일은 차량번호가 2107처럼 뒤4자리만 들어오는 행이 많다.
-    #    뒤4자리가 원장 내에서 유일하면 그 회원으로 매칭한다.
-    if last4:
-        candidate = by_last4_unique.get(last4)
-        if candidate is not None:
-            return candidate
+    key = (_person_name(name), _vehicle_last4(vehicle_no))
+    if key[0] and key[1]:
+        return by_name_last4.get(key)
     return None
 
 
@@ -588,9 +601,9 @@ async def preview_import(file_type: str = Form(...), file: UploadFile = File(...
             }
         if file_type == "arrears":
             rows = _iter_arrears_rows(data, preview_limit=300)
-            by_vehicle, by_name_last4, by_last4_unique = _member_match_maps(db)
+            by_vehicle, by_name_last4 = _member_match_maps(db)
             for r in rows:
-                member = _find_member_from_maps(by_vehicle, by_name_last4, by_last4_unique, r.get("성명", ""), r.get("차량번호", ""))
+                member = _find_member_from_maps(by_vehicle, by_name_last4, r.get("성명", ""), r.get("차량번호", ""))
                 r["매칭상태"] = "매칭" if member else "미매칭"
                 r["매칭된 회원명"] = member.name if member else ""
                 r["매칭된 차량번호"] = member.vehicle_no if member else ""
@@ -649,14 +662,14 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
         next_no = _current_max_member_no(db) + 1
         used_ids = set(db.scalars(select(Member.id)).all())
         used_mgmt: set[str] = {x for x in db.scalars(select(Member.mgmt_no)).all() if x}
-        by_vehicle, by_name_last4, by_last4_unique = _member_match_maps(db)
+        by_vehicle, by_name_last4 = _member_match_maps(db)
         for row in rows:
             vehicle = row["차량번호"]
             name = row["성명"]
             if not _valid_vehicle(vehicle) or not name:
                 skipped += 1
                 continue
-            existing = _find_member_from_maps(by_vehicle, by_name_last4, by_last4_unique, name, vehicle)
+            existing = _find_member_from_maps(by_vehicle, by_name_last4, name, vehicle)
             membership = row["가입여부"]
             item = charge_item(membership)
             cert_date = _parse_date(row.get("자격증명 발급일자"))
@@ -665,11 +678,7 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             byear = _birth_year(row.get("주민등록번호", ""))
             age = (date.today().year - byear) if byear else None
             amount = monthly_charge(membership, age=age, birth_year=byear)
-            memo_parts = []
-            for k in ["주소", "사업자등록번호", "소속업체", "공문 주소", "대리인", "구조변경", "비고", "전화 메모", "비고2", "비고3"]:
-                if row.get(k):
-                    memo_parts.append(f"{k}:{row[k]}")
-            memo = " / ".join(memo_parts)[:1000] or "엑셀 업로드 반영"
+            memo = _ledger_note(row)
             if existing:
                 m = existing
                 raw_mgmt = _clean(row.get("관리번호"))
@@ -694,7 +703,11 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 m.monthly_charge = amount
                 m.status = m.status or "정상"
                 m.cert_missing = cert_date is None
-                m.memo = memo
+                cleaned_memo = _strip_generated_member_memo(m.memo)
+                if memo:
+                    m.memo = _append_unique_note(cleaned_memo, "원장 비고", memo)
+                else:
+                    m.memo = cleaned_memo
                 updated += 1
             else:
                 while _next_member_id_from_no(next_no) in used_ids:
@@ -745,14 +758,22 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
         rows = _iter_arrears_rows(data, preview_limit=None)
         inserted = updated = skipped = 0
         unmatched: list[str] = []
-        by_vehicle, by_name_last4, by_last4_unique = _member_match_maps(db)
+        by_vehicle, by_name_last4 = _member_match_maps(db)
         for row in rows:
-            member = _find_member_from_maps(by_vehicle, by_name_last4, by_last4_unique, row["성명"], row["차량번호"])
+            member = _find_member_from_maps(by_vehicle, by_name_last4, row["성명"], row["차량번호"])
             if not member:
                 skipped += 1
                 if len(unmatched) < 80:
                     unmatched.append(f"미매칭: {row['성명']} / {row['차량번호']} / {row.get('현재 미수금액', 0):,}원")
                 continue
+
+            # 2026미수금 파일의 비고는 회원 원장의 비고와 별개로 반드시 회원 메모에 합쳐 저장한다.
+            # 통장매칭 후보/수동검색에서 이 메모를 보여주고, 메모 속 이름도 매칭 근거로 사용하기 위함.
+            arrears_note = _clean(row.get("비고"))
+            if arrears_note:
+                member.memo = _append_unique_note(member.memo, "미수금 비고", arrears_note)
+                if _is_contact_problem_note(arrears_note):
+                    member.is_disconnected = True
 
             # 재업로드 시 해당 회원의 기존 미수 상세를 현재잔액 1건으로 교체한다.
             db.execute(delete(ReceivableItem).where(ReceivableItem.member_id == member.id))
