@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .database import Base, engine
-from .routers import closures, dashboard, deposits, imports, members, pending, payments
+from .routers import closures, dashboard, deposits, imports, members, pending, payments, public_lookup
 
 settings = get_settings()
 
@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 # API 라우터
-for r in (members, deposits, closures, pending, dashboard, imports, payments):
+for r in (members, deposits, closures, pending, dashboard, imports, payments, public_lookup):
     app.include_router(r.router)
 
 
@@ -61,11 +61,3 @@ if STATIC_DIR.is_dir():
         if full_path and candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(STATIC_DIR / "index.html")
-
-
-# 회원용 미수금 조회 라우터
-try:
-    from routers.public_lookup import router as public_lookup_router
-    app.include_router(public_lookup_router)
-except Exception as e:
-    print(f"public_lookup router load skipped: {e}")
