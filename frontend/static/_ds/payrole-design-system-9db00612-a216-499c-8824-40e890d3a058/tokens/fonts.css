@@ -1,0 +1,22 @@
+/* ============================================================
+   Payrole — Fonts
+   PRIMARY TYPEFACE: TT Hoves (commercial, TypeType foundry)
+   SUBSTITUTE: "Onest" — a geometric grotesque with near-identical
+   proportions, loaded from Google Fonts. Swap the @import + the
+   --font-sans stack for self-hosted TT Hoves @font-face when the
+   licensed binaries are available.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Display / UI sans — TT Hoves in production */
+  --font-sans: "Onest", "TT Hoves", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Weights mapped to the TT Hoves weights used in the file */
+  --fw-regular: 400;   /* @kind font */
+  --fw-medium: 500;    /* @kind font */
+  --fw-demibold: 600;  /* @kind font */
+  --fw-bold: 700;      /* @kind font */
+}

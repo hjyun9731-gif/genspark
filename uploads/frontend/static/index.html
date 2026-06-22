@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>강원 화물협회 · 미수금 관리 시스템</title>
+
+<link rel="stylesheet" href="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/tokens/fonts.css" />
+<link rel="stylesheet" href="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/tokens/colors.css" />
+<link rel="stylesheet" href="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/tokens/typography.css" />
+<link rel="stylesheet" href="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/tokens/spacing.css" />
+<link rel="stylesheet" href="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/styles.css" />
+
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--font-sans); background: var(--surface-canvas); color: var(--text-primary);
+    -webkit-font-smoothing: antialiased; }
+  #root { height: 100vh; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--grey-200); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--grey-300); background-clip: content-box; }
+  @keyframes pmFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pmPop { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes pmSlide { from { transform: translateX(28px); opacity: .4; } to { transform: none; opacity: 1; } }
+  input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .55; }
+  select:focus, input:focus { outline: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#EBF3FF"/>
+    <rect x="30" y="28" width="40" height="44" rx="5" fill="#3981F7"/>
+    <rect x="36" y="36" width="28" height="4" rx="2" fill="#fff"/>
+    <rect x="36" y="45" width="20" height="4" rx="2" fill="#fff" opacity=".8"/>
+    <rect x="36" y="54" width="24" height="4" rx="2" fill="#fff" opacity=".6"/>
+    <circle cx="62" cy="63" r="4" fill="#0AAF60"/>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="_ds/payrole-design-system-9db00612-a216-499c-8824-40e890d3a058/_ds_bundle.js"></script>
+
+<script type="text/babel" src="app/tweaks-panel.jsx"></script>
+<script type="text/babel" src="app/data.jsx"></script>
+<script type="text/babel" src="app/ui.jsx"></script>
+<script type="text/babel" src="app/AppShell.jsx"></script>
+<script type="text/babel" src="app/Dashboard.jsx"></script>
+<script type="text/babel" src="app/Receivables.jsx"></script>
+<script type="text/babel" src="app/Regional.jsx"></script>
+<script type="text/babel" src="app/BankMatching.jsx"></script>
+<script type="text/babel" src="app/Closures.jsx"></script>
+<script type="text/babel" src="app/Upload.jsx"></script>
+<script type="text/babel" src="app/Modals.jsx"></script>
+<script type="text/babel" src="app/App.jsx"></script>
+</body>
+</html>
