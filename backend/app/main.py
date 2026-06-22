@@ -61,3 +61,11 @@ if STATIC_DIR.is_dir():
         if full_path and candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(STATIC_DIR / "index.html")
+
+
+# 회원용 미수금 조회 라우터
+try:
+    from routers.public_lookup import router as public_lookup_router
+    app.include_router(public_lookup_router)
+except Exception as e:
+    print(f"public_lookup router load skipped: {e}")
