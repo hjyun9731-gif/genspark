@@ -259,6 +259,17 @@ function buildDeposits(members){
     deps.push({ id:id++, depositDate:dDate(), depositorName:n, amount:[10000,30000,5000,50000][ri(0,3)],
       memo:`${n} 입금`, description:"타행이체", status:"미매칭", candidates:[] });
   });
+  // 묶음수납 후보 — 한 입금이 여러 회원 미수를 대납 (대납자 묶음)
+  if (overdue.length>=19){
+    const g = overdue.slice(16,19);
+    const expected = g.reduce((s,m)=>s+outstanding(m),0);
+    deps.push({ id:id++, depositDate:dDate(), depositorName:g[0].name, amount:expected,
+      memo:`${g.map(m=>m.name).join(' ')} 합동`, description:"무통장", status:"후보확인",
+      candidates: g.map(m=>mkCand(m,"묶음 대납 후보",outstanding(m))),
+      groupCandidates:[{ code:"GRP-1", title:`${g[0].name} 외 ${g.length-1}명 묶음`, reason:"동일 입금자 합동/화물유지계약 대납",
+        resolvedCount:g.length, targetCount:g.length, expectedAmount:expected, diff: expected-expected,
+        members: g.map(m=>({ id:m.id, name:m.name, amount:outstanding(m) })) }] });
+  }
   // 매칭완료 / 제외 예시
   if (overdue.length){ const m=overdue[2]; deps.push({ id:id++, depositDate:"2026-06-02", depositorName:m.name, amount:m.monthlyCharge, memo:`${m.name}`, description:"CMS", status:"매칭완료", candidates:[mkCand(m,"처리완료",m.monthlyCharge)] }); }
   deps.push({ id:id++, depositDate:"2026-06-01", depositorName:"환불반제", amount:3000, memo:"수수료 환급", description:"내부", status:"제외", candidates:[] });
@@ -276,8 +287,21 @@ function buildClosures(members){
   }));
 }
 
+// ===== 신규 · 예정자 (자격증명 발급 예정 / 신규 등록 대기) =====
+function buildPending(){
+  const rows = [
+    { name:"권상호", sigun:"춘천시", vehicleNo:"강원 80바 7741", phone:"010-2231-7741", membership:"협회미가입", certIssueDate:"2026-05-18", billingStartYm:"2026-06", reason:"자격증명 발급 — 익월 관리비 부과 예정", kind:"예정" },
+    { name:"맹순자", sigun:"평창군", vehicleNo:"강원 86아 2210", phone:"010-5532-2210", membership:"협회가입", certIssueDate:"2026-05-22", billingStartYm:"2026-06", reason:"70세 감면 대상 — 협회비 5,000원", kind:"예정" },
+    { name:"오태웅", sigun:"강릉시", vehicleNo:"강원 81배 3392", phone:"", membership:"협회미가입", certIssueDate:"2026-06-02", billingStartYm:"2026-07", reason:"신규 택배 등록 — 전화번호 확인 필요", kind:"신규" },
+    { name:"한경수", sigun:"원주시", vehicleNo:"강원 82바 5520", phone:"010-7781-5520", membership:"협회가입", certIssueDate:"2026-06-05", billingStartYm:"2026-07", reason:"협회 가입 승인 대기", kind:"신규" },
+    { name:"신덕배", sigun:"홍천군", vehicleNo:"강원 83바 1180", phone:"010-3344-1180", membership:"협회미가입", certIssueDate:"2026-06-09", billingStartYm:"2026-07", reason:"자격증명 발급 — 익월 부과 예정", kind:"예정" },
+  ];
+  return rows.map((r,i)=>({ id:i+1, ...r, monthlyCharge: r.membership==="협회가입"?(r.reason.includes("70세")?5000:10000):5000 }));
+}
+
 const DEPOSITS = buildDeposits(MEMBERS);
 const CLOSURES = buildClosures(MEMBERS);
+const PENDING = buildPending();
 
 // ===== 포맷 =====
 const won = (n) => { const v=Math.abs(n||0); return (n<0?"-":"") + v.toLocaleString("ko-KR") + "원"; };
@@ -332,7 +356,7 @@ function aggregate(list){
 }
 
 window.PMData = {
-  MEMBERS, REGIONS, DEPOSITS, CLOSURES, INCOME_ITEMS,
+  MEMBERS, REGIONS, DEPOSITS, CLOSURES, PENDING, INCOME_ITEMS,
   won, wonShort, num, ymLabel, aggregate, isExcludedStatus,
   openItems, balanceItems, outstanding, arrearsMonths, paidTotal, ledgerArrears,
   basisYm, billingBasisDate, payStatus, applyPayment, normVehicle, last4,

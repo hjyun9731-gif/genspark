@@ -12,7 +12,7 @@ function CTypeBadge({ type }){
   return <span style={{ display:"inline-flex", alignItems:"center", padding:"3px 10px", borderRadius:"var(--radius-pill)", background:s.bg, color:s.fg, font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>{type}</span>;
 }
 
-function Closures({ closures, onToast }){
+function Closures({ closures, onRestore, onDelete, onToast }){
   const D = window.PMData; const { won, num } = D;
   const [type, setType] = React.useState("전체");
   const [onlyDebt, setOnlyDebt] = React.useState(false);
@@ -65,7 +65,7 @@ function Closures({ closures, onToast }){
         <div style={{ maxHeight:"calc(100vh - 400px)", overflow:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              <Th label="처리사유" /><Th label="지역" /><Th label="성명" /><Th label="차량번호" /><Th label="관리번호" /><Th label="처리일" /><Th label="공문/접수" /><Th label="미납잔액" align="right" /><Th label="추후안내" />
+              <Th label="처리사유" /><Th label="지역" /><Th label="성명" /><Th label="차량번호" /><Th label="관리번호" /><Th label="처리일" /><Th label="공문/접수" /><Th label="미납잔액" align="right" /><Th label="추후안내" /><Th label="처리" align="right" />
             </tr></thead>
             <tbody>
               {rows.map((c)=>(
@@ -83,9 +83,15 @@ function Closures({ closures, onToast }){
                       ? <span style={{ display:"inline-flex", alignItems:"center", gap:5, font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"#B9791A" }}><span style={{ width:6, height:6, borderRadius:"50%", background:"#B9791A" }} />대상</span>
                       : <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>—</span>) : <span style={{ font:"var(--body-sm)", color:"var(--green-500)" }}>정산완료</span>}
                   </td>
+                  <td style={{ padding:"12px 16px", textAlign:"right", whiteSpace:"nowrap" }}>
+                    <div style={{ display:"inline-flex", gap:6 }}>
+                      <button type="button" onClick={()=>{ if(confirm(`${c.name} 회원을 정상 명단으로 복귀할까요?`)) onRestore(c); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--brand)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>복귀</button>
+                      <button type="button" onClick={()=>{ if(confirm(`${c.name} 폐업기록을 삭제할까요? (회원 데이터는 유지)`)) onDelete(c); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>삭제</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {rows.length===0 && <tr><td colSpan={9} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>}
+              {rows.length===0 && <tr><td colSpan={10} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>

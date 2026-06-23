@@ -13,6 +13,8 @@ const TITLES = {
   regional:  ["지역별 미수금 · 문자 대상 추출", "지역·부과항목별로 추출하거나 문자 발송 대상을 뽑아 엑셀로 내려받습니다."],
   bank:      ["통장매칭", "입금자명·입금액을 회원 미수금과 대조해 수납으로 반영합니다."],
   closure:   ["폐업현황", "폐업·양도·이관·탈퇴 회원과 미납잔액 추심 대상을 관리합니다."],
+  pending:   ["신규 · 예정자", "자격증명 발급 예정·신규 등록 대기자를 관리하고 정식 명단으로 전환합니다."],
+  certprint: ["자격증명 인쇄", "화물운송종사자격증명을 웹에서 바로 입력·미리보기하고 인쇄합니다."],
   history:   ["수납 내역", "전체 수납 기록과 회계구분을 확인합니다."],
   upload:    ["엑셀 업로드", "협회 엑셀 자료를 업로드해 미리보기 후 안전하게 반영합니다."],
   settings:  ["설정", "부과 기준·지역명 정규화를 관리합니다."],
@@ -24,6 +26,7 @@ function App(){
   const [members, setMembers] = React.useState(D.MEMBERS);
   const [deposits, setDeposits] = React.useState(D.DEPOSITS);
   const [closures, setClosures] = React.useState(D.CLOSURES);
+  const [pending, setPending] = React.useState(D.PENDING);
   const [drill, setDrill] = React.useState(null);
   const [payTarget, setPayTarget] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
@@ -68,6 +71,52 @@ function App(){
   };
   const excludeDeposit = (deposit)=>{ setDeposits(ds=> ds.map(d=> d.id===deposit.id ? { ...d, status:"제외" } : d)); showToast("입금 거래 제외 처리"); };
 
+  // 묶음수납 — 한 입금으로 그룹 내 여러 회원 대납
+  const matchDepositGroup = (deposit, group)=>{
+    const ids = (group.members||[]).map(m=>m.id);
+    setMembers(ms=> ms.map(m=> ids.includes(m.id)
+      ? D.applyPayment(m, { amount: D.outstanding(m), method:"묶음수납", chargeItem:m.chargeItem, paidDate:deposit.depositDate }).member
+      : m));
+    setDeposits(ds=> ds.map(d=> d.id===deposit.id ? { ...d, status:"매칭완료" } : d));
+  };
+  // 통장거래 붙여넣기 — 대기 거래 추가
+  const pasteDeposits = (rows)=>{
+    setDeposits(ds=>{ let id = Math.max(0,...ds.map(d=>d.id))+1; return [...rows.map(r=>({ id:id++, depositDate:r.depositDate, depositorName:r.depositorName, amount:r.amount, memo:r.memo, description:r.description, status:"미매칭", candidates:[] })), ...ds]; });
+  };
+  // 통장매칭 결과 초기화 — 수납 반영 안 된 건을 대기로
+  const resetBank = ()=>{ setDeposits(ds=> ds.map(d=> ["매칭완료","제외"].includes(d.status)? d : ({ ...d, status: d.groupCandidates?.length?"후보확인": d.candidates?.length?"자동매칭":"미매칭" }))); showToast("통장매칭 결과 초기화"); };
+
+  // 폐업 복귀 / 삭제
+  const restoreClosure = (c)=>{ setMembers(ms=> ms.map(m=> m.id===c.memberId ? { ...m, status:"정상" } : m)); setClosures(cs=> cs.filter(x=>x.id!==c.id)); showToast(`${c.name} 회원 정상 명단으로 복귀`); };
+  const deleteClosure = (c)=>{ setClosures(cs=> cs.filter(x=>x.id!==c.id)); showToast(`${c.name} 폐업기록 삭제 (회원 데이터 유지)`); };
+
+  // 수납 취소 / 전체 초기화
+  const cancelPayment = (member, pay)=>{
+    setMembers(ms=> ms.map(m=>{
+      if (m.id!==member.id) return m;
+      const arrears=(m.arrears||[]).map(a=>({...a}));
+      if (D.isArrearsIncome(pay.chargeItem)){ const it=arrears.find(a=>a.ym===pay.paidForYm); if(it){ it.paid=false; it.amount=(it.amount||0); } else arrears.push({ ym:pay.paidForYm, label:"복원", item:pay.chargeItem, amount: m.monthlyCharge, paid:false }); }
+      return { ...m, arrears, payments:(m.payments||[]).filter(p=>p.id!==pay.id) };
+    }));
+    showToast(`수납 취소 · ${won(pay.amount)} 되돌림`);
+  };
+
+  // 신규·예정자
+  const addPending = (row)=>{ setPending(ps=> [{ ...row, id: Math.max(0,...ps.map(p=>p.id))+1 }, ...ps]); showToast(`${row.name} 예정자 등록`); };
+  const updatePending = (row)=>{ setPending(ps=> ps.map(p=> p.id===row.id? row : p)); showToast(`${row.name} 예정자 수정`); };
+  const deletePending = (row)=>{ setPending(ps=> ps.filter(p=>p.id!==row.id)); showToast(`${row.name} 예정자 삭제`); };
+  const promotePending = (row)=>{
+    setPending(ps=> ps.filter(p=>p.id!==row.id));
+    setMembers(ms=>{
+      const n = ms.length+1;
+      const isSenior = (row.reason||"").includes("70세");
+      const chargeItem = row.membership==="협회가입" ? (isSenior?"70세":"협회비") : "관리비";
+      const mem = { id:`GW-${String(n).padStart(3,"0")}`, mgmtNo:`NEW-${row.id}`, name:row.name, vehicleNo:row.vehicleNo, phone:row.phone||"", sigun:row.sigun, regionRaw:row.sigun, memberType:"개인", membership:row.membership, age:isSenior?72:50, isSenior, certIssueDate:row.certIssueDate||"", assocJoinDate: row.membership==="협회가입"?row.billingStartYm+"-01":"", billingStartYm:row.billingStartYm, chargeItem, monthlyCharge:row.monthlyCharge, lastPaymentYm:null, status:"정상", disconnected:false, certMissing:!row.certIssueDate, address:`강원특별자치도 ${row.sigun}`, pubAddress:`강원특별자치도 ${row.sigun}`, bizNo:"", note:"신규전환", arrears:[], payments:[] };
+      return [...ms, mem];
+    });
+    showToast(`${row.name} 전체자명단 전환 완료`);
+  };
+
   // 폐업/이탈 등록 (상태 변경 + closures 추가, 데이터 삭제 X)
   const registerClosure = (member, payload)=>{
     const bal = D.outstanding(member);
@@ -92,10 +141,12 @@ function App(){
       {route==="dashboard" && <window.Dashboard agg={agg} members={members} deposits={deposits} closures={closures} onDrill={goList} onNav={setRoute} year={year} month={month} />}
       {route==="list" && <window.Receivables members={members} drill={drill} density={t.density} onPay={setPayTarget} onSelect={setDetail} onToast={showToast} />}
       {route==="regional" && <window.Regional members={members} onToast={showToast} />}
-      {route==="bank" && <window.BankMatching deposits={deposits} members={members} onMatch={matchDeposit} onExclude={excludeDeposit} onToast={showToast} />}
-      {route==="closure" && <window.Closures closures={closures} onToast={showToast} />}
+      {route==="bank" && <window.BankMatching deposits={deposits} members={members} onMatch={matchDeposit} onGroupMatch={matchDepositGroup} onExclude={excludeDeposit} onReset={resetBank} onPaste={pasteDeposits} onToast={showToast} />}
+      {route==="closure" && <window.Closures closures={closures} onRestore={restoreClosure} onDelete={deleteClosure} onToast={showToast} />}
+      {route==="pending" && <window.Pending pending={pending} onAdd={addPending} onUpdate={updatePending} onDelete={deletePending} onPromote={promotePending} onToast={showToast} />}
+      {route==="certprint" && <window.CertPrint onToast={showToast} />}
       {route==="upload" && <window.Upload onApply={handleApply} />}
-      {route==="history" && <HistoryView members={members} />}
+      {route==="history" && <HistoryView members={members} onCancel={cancelPayment} />}
       {route==="settings" && <SettingsView />}
 
       {payTarget && <window.PayModal member={payTarget} onClose={()=>setPayTarget(null)} onConfirm={confirmPay} />}
@@ -119,10 +170,10 @@ function App(){
 }
 
 // 수납 내역 (전체)
-function HistoryView({ members }){
+function HistoryView({ members, onCancel }){
   const { Card } = window.PayroleDesignSystem_9db006;
   const rows = [];
-  members.forEach(m=> (m.payments||[]).forEach(p=> rows.push({ ...p, name:m.name, sigun:m.sigun, vno:m.vehicleNo })));
+  members.forEach(m=> (m.payments||[]).forEach(p=> rows.push({ ...p, mid:m.id, name:m.name, sigun:m.sigun, vno:m.vehicleNo })));
   rows.sort((a,b)=>(b.paidDate||"").localeCompare(a.paidDate||""));
   const total = rows.reduce((s,p)=>s+p.amount,0);
   return (
@@ -136,7 +187,7 @@ function HistoryView({ members }){
         <div style={{ maxHeight:"calc(100vh - 320px)", overflow:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              {["수납일","성명","지역","차량번호","대상월","수납항목","회계구분","납부방식","금액"].map((h,i)=>(
+              {["수납일","성명","지역","차량번호","대상월","수납항목","회계구분","납부방식","금액",""].map((h,i)=>(
                 <th key={h} style={{ textAlign:i===8?"right":"left", padding:"12px 18px", whiteSpace:"nowrap", font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-subtle)", position:"sticky", top:0 }}>{h}</th>))}
             </tr></thead>
             <tbody>
@@ -151,9 +202,12 @@ function HistoryView({ members }){
                   <td style={{ padding:"12px 18px" }}><window.PMUI.AccountingTag accounting={r.accounting} /></td>
                   <td style={{ padding:"12px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.method}</td>
                   <td style={{ padding:"12px 18px", textAlign:"right", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--green-500)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>+{won(r.amount)}</td>
+                  <td style={{ padding:"12px 18px", textAlign:"right" }}>
+                    <button type="button" onClick={()=>{ if(confirm(`${r.name} · ${won(r.amount)} 수납을 취소할까요?`)) onCancel(members.find(m=>m.id===r.mid)||{id:r.mid,name:r.name,monthlyCharge:0,arrears:[],payments:[]}, r); }} style={{ height:26, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 11px/1 var(--font-sans)" }}>취소</button>
+                  </td>
                 </tr>
               ))}
-              {rows.length===0 && <tr><td colSpan={9} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)" }}>수납 기록이 없습니다.</td></tr>}
+              {rows.length===0 && <tr><td colSpan={10} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)" }}>수납 기록이 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>

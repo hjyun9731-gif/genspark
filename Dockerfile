@@ -1,13 +1,12 @@
-# ── 1단계: 프론트 빌드 ───────────────────────────────
+# ── 1단계: 프론트 빌드 (static copy — Vite 불필요) ──
 FROM node:20-slim AS frontend
 WORKDIR /fe
 
-# Railway/Nixpacks 환경에서 NODE_ENV=production이어도 Vite devDependency가 설치되도록 include=dev 명시
 COPY frontend/package.json ./
-RUN npm install --include=dev
+RUN npm install
 
 COPY frontend/ ./
-RUN npm run build -- --outDir dist --emptyOutDir
+RUN npm run build
 
 # ── 2단계: 백엔드 런타임 ─────────────────────────────
 FROM python:3.12-slim AS runtime
