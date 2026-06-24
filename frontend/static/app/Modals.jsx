@@ -1,11 +1,11 @@
-// 수납 처리 모달 + 회원 상세 패널 (Genspark 이식: 수납항목/회계구분, 오래된 달부터 차감, 월별 미수 상세, 수납내역)
+// 수납 처리 모달 + 회원 상세 패널 (넓은 드로어, 탭 구조, 수정 기능, API 연동)
 const { Icon, Button, Avatar } = window.PayroleDesignSystem_9db006;
 
-function Backdrop({ onClose, children, align="center" }){
+function Backdrop({ onClose, children, align="center" }) {
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:100,
       background:"rgba(10,17,47,0.38)", display:"flex",
-      justifyContent: align==="right"?"flex-end":"center", alignItems: align==="right"?"stretch":"center",
+      justifyContent:align==="right"?"flex-end":"center", alignItems:align==="right"?"stretch":"center",
       backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
       {children}
     </div>
@@ -14,39 +14,38 @@ function Backdrop({ onClose, children, align="center" }){
 
 const fieldLabel = { font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", marginBottom:7, display:"block" };
 const inputBase = {
-  width:"100%", height:44, padding:"0 14px", boxSizing:"border-box",
+  width:"100%", height:40, padding:"0 12px", boxSizing:"border-box",
   border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)",
-  font:"var(--fw-medium) 15px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)",
+  font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)",
 };
 const selectBase = { ...inputBase, appearance:"none", cursor:"pointer", paddingRight:34,
   backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")",
   backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
 
 // ===== 수납 처리 모달 =====
-function PayModal({ member, onClose, onConfirm }){
+function PayModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
   const { won } = D;
   const curBalance = D.outstanding(member);
   const [chargeItem, setChargeItem] = React.useState(member.chargeItem || "관리비");
   const [amount, setAmount] = React.useState(Math.max(curBalance, member.monthlyCharge||0));
-  const [date, setDate] = React.useState("2026-06-20");
+  const [date, setDate] = React.useState("2026-06-24");
   const [method, setMethod] = React.useState("직접수납");
 
   const meta = D.incomeMeta(chargeItem);
   const deduct = D.isArrearsIncome(chargeItem);
   const amt = parseInt(amount)||0;
 
-  // 미리보기: 오래된 달부터 차감
-  const preview = React.useMemo(()=>{
+  const preview = React.useMemo(() => {
     if (!deduct) return { rows:[], after:curBalance, overflow:0, months:0 };
     const opens = D.openItems(member);
     let remain = amt; const rows=[]; let months=0;
-    for (const it of opens){ if(remain<=0) break; const pay=Math.min(remain,it.amount); rows.push({ ym:it.ym, amount:pay, full:pay>=it.amount }); remain-=pay; if(pay>=it.amount) months++; }
-    return { rows, after: curBalance - (amt-remain), overflow: remain, months };
+    for (const it of opens) { if(remain<=0) break; const pay=Math.min(remain,it.amount); rows.push({ ym:it.ym, amount:pay, full:pay>=it.amount }); remain-=pay; if(pay>=it.amount) months++; }
+    return { rows, after: curBalance-(amt-remain), overflow: remain, months };
   }, [amt, chargeItem, member]);
 
   const after = deduct ? preview.after : curBalance;
-  const nextStatus = after<0 ? "선납" : after===0 ? "완납" : "미납";
+  const nextStatus = after<0?"선납":after===0?"완납":"미납";
 
   return (
     <Backdrop onClose={onClose}>
@@ -56,14 +55,16 @@ function PayModal({ member, onClose, onConfirm }){
             <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>수납 반영</div>
             <div style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", marginTop:3 }}>{member.name} · {member.sigun} · {member.vehicleNo}</div>
           </div>
-          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
+          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} />
+          </button>
         </div>
 
         <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:18, overflow:"auto" }}>
           <div style={{ display:"flex", gap:10 }}>
             <div style={{ flex:1, padding:"12px 16px", background:"var(--red-50)", borderRadius:"var(--radius-md)" }}>
               <div style={{ font:"var(--body-xs)", color:"#A12D2D" }}>현재잔액</div>
-              <div style={{ font:"var(--fw-bold) 18px/1 var(--font-sans)", color: curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--text-tertiary)", marginTop:4 }}>{won(curBalance)}</div>
+              <div style={{ font:"var(--fw-bold) 18px/1 var(--font-sans)", color:curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--text-tertiary)", marginTop:4 }}>{won(curBalance)}</div>
             </div>
             <div style={{ flex:1, padding:"12px 16px", background:"var(--grey-25)", borderRadius:"var(--radius-md)" }}>
               <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>미수개월수</div>
@@ -86,7 +87,7 @@ function PayModal({ member, onClose, onConfirm }){
             <label style={fieldLabel}>수납액</label>
             <div style={{ position:"relative" }}>
               <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} style={{ ...inputBase, paddingRight:44, textAlign:"right", fontWeight:700, fontSize:17 }} />
-              <span style={{ position:"absolute", right:14, top:0, height:44, display:"flex", alignItems:"center", color:"var(--text-tertiary)", font:"var(--fw-medium) 14px/1 var(--font-sans)" }}>원</span>
+              <span style={{ position:"absolute", right:14, top:0, height:40, display:"flex", alignItems:"center", color:"var(--text-tertiary)", font:"var(--fw-medium) 14px/1 var(--font-sans)" }}>원</span>
             </div>
             <div style={{ display:"flex", gap:6, marginTop:8 }}>
               {[["전액",Math.max(curBalance,0)],["월부과금",member.monthlyCharge],["3개월",member.monthlyCharge*3]].map(([l,v])=>(
@@ -108,25 +109,24 @@ function PayModal({ member, onClose, onConfirm }){
             </div>
           </div>
 
-          {/* 차감 미리보기 */}
-          {deduct && preview.rows.length>0 && (
+          {deduct && preview.rows.length > 0 && (
             <div style={{ padding:"12px 14px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", border:"1px dashed var(--border-default)" }}>
               <div style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", marginBottom:8 }}>오래된 달부터 차감 ({preview.months}개월 완납)</div>
               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                 {preview.rows.map(r=>(
                   <span key={r.ym} style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"4px 9px", borderRadius:"var(--radius-pill)",
-                    background: r.full?"var(--green-50)":"var(--amber-50)", color: r.full?"var(--green-500)":"#B9791A", font:"var(--fw-medium) 12px/1 var(--font-sans)", fontVariantNumeric:"tabular-nums" }}>
-                    {r.ym} {won(r.amount)}{!r.full && " (일부)"}</span>
+                    background:r.full?"var(--green-50)":"var(--amber-50)", color:r.full?"var(--green-500)":"#B9791A", font:"var(--fw-medium) 12px/1 var(--font-sans)", fontVariantNumeric:"tabular-nums" }}>
+                    {r.ym} {won(r.amount)}{!r.full&&" (일부)"}</span>
                 ))}
               </div>
               {preview.overflow>0 && <div style={{ font:"var(--body-xs)", color:"var(--violet-500)", marginTop:8 }}>초과 {won(preview.overflow)} → 선납/초과입금으로 기록</div>}
             </div>
           )}
 
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background: after<=0?"var(--green-50)":"var(--grey-25)", borderRadius:"var(--radius-md)" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:after<=0?"var(--green-50)":"var(--grey-25)", borderRadius:"var(--radius-md)" }}>
             <div>
               <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리 후 현재잔액</div>
-              <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color: after<0?"var(--violet-500)":after===0?"var(--green-500)":"var(--text-primary)", marginTop:2 }}>{won(after)}</div>
+              <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:after<0?"var(--violet-500)":after===0?"var(--green-500)":"var(--text-primary)", marginTop:2 }}>{won(after)}</div>
             </div>
             <window.PMUI.StatusPill status={nextStatus} />
           </div>
@@ -143,128 +143,315 @@ function PayModal({ member, onClose, onConfirm }){
 }
 
 // ===== 회원 상세 패널 =====
-function MemberDetail({ member, onClose, onPay, onClosure }){
+const DETAIL_TABS = ["기본정보","미수원장","수납내역","처리이력"];
+
+const SIGUN_LIST = ["춘천시","원주시","강릉시","동해시","태백시","속초시","삼척시","홍천군","횡성군","영월군","평창군","정선군","철원군","화천군","양구군","인제군","고성군","양양군"];
+
+function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpdate, onToast }) {
   const D = window.PMData;
   const { won } = D;
-  const open = D.balanceItems(member);
-  const curBalance = D.outstanding(member);
-  const [tab, setTab] = React.useState("미수");
+  const [tab, setTab] = React.useState("기본정보");
+  const [member, setMember] = React.useState(initialMember);
+  const [loading, setLoading] = React.useState(false);
+  const [editMode, setEditMode] = React.useState(false);
+  const [editForm, setEditForm] = React.useState({});
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState(null);
 
-  const Row = ({ label, value, strong })=>(
-    <div style={{ display:"flex", justifyContent:"space-between", gap:16, padding:"9px 0" }}>
-      <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", flex:"none" }}>{label}</span>
-      <span style={{ font: strong?"var(--fw-demibold) 14px/1.4 var(--font-sans)":"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }}>{value||"—"}</span>
+  // 상세 데이터 API에서 로드
+  React.useEffect(() => {
+    if (!member?.id) return;
+    setLoading(true);
+    fetch(`/api/members/${member.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setMember(data); })
+      .catch(() => {}) // 오프라인 시 initialMember 그대로 사용
+      .finally(() => setLoading(false));
+  }, [initialMember?.id]);
+
+  const startEdit = () => {
+    setEditForm({
+      name: member.name || "",
+      sigun: member.sigun || "",
+      vehicle_no: member.vehicleNo || member.vehicle_no || "",
+      mgmt_no: member.mgmtNo || member.mgmt_no || "",
+      phone: member.phone || "",
+      address: member.address || "",
+      public_address: member.publicAddress || member.public_address || "",
+      membership: member.membership || "",
+      member_type: member.memberType || member.member_type || "",
+      status: member.status || "",
+      memo: member.memo || "",
+    });
+    setEditMode(true);
+    setSaveError(null);
+  };
+
+  const cancelEdit = () => { setEditMode(false); setSaveError(null); };
+
+  const saveEdit = async () => {
+    setSaving(true); setSaveError(null);
+    try {
+      const body = {
+        name: editForm.name,
+        sigun: editForm.sigun,
+        vehicle_no: editForm.vehicle_no,
+        mgmt_no: editForm.mgmt_no,
+        phone: editForm.phone,
+        address: editForm.address,
+        public_address: editForm.public_address,
+        membership: editForm.membership,
+        member_type: editForm.member_type,
+        status: editForm.status,
+        memo: editForm.memo,
+      };
+      const res = await fetch(`/api/members/${member.id}`, {
+        method:"PATCH",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) { setSaveError(json.detail || "저장 실패"); return; }
+      setMember(json);
+      onUpdate && onUpdate(json);
+      onToast && onToast(`${json.name} 회원 정보가 저장되었습니다.`);
+      setEditMode(false);
+    } catch(e) { setSaveError("저장 중 오류: "+e.message); }
+    finally { setSaving(false); }
+  };
+
+  const ef = (key) => (val) => setEditForm(f=>({...f,[key]:val}));
+
+  const curBalance = D.outstanding(member);
+  const open = D.openItems ? D.openItems(member) : (member.arrears||[]).filter(a=>!a.paid&&a.amount>0);
+  const ledgerArrears = open.reduce((s,a)=>s+a.amount,0);
+  const paidTotal = (member.payments||[]).reduce((s,p)=>s+p.amount,0);
+  const arrearsMonths = open.length;
+
+  const InfoRow = ({ label, value, strong, mono }) => (
+    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid var(--border-subtle)" }}>
+      <span style={{ font:"var(--fw-medium) 12px/1.4 var(--font-sans)", color:"var(--text-tertiary)", minWidth:110, flex:"none" }}>{label}</span>
+      <span style={{ font: strong?"var(--fw-demibold) 14px/1.4 var(--font-sans)":"var(--body-sm)", color:"var(--text-primary)", wordBreak:"break-all", fontVariantNumeric:mono?"tabular-nums":"normal" }}>{value||"—"}</span>
     </div>
   );
-  const SectionTitle = ({ children })=>(
-    <div style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", letterSpacing:"0.03em", margin:"20px 0 4px" }}>{children}</div>
+
+  const EditRow = ({ label, fieldKey, type="text", options }) => (
+    <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid var(--border-subtle)", alignItems:"center" }}>
+      <span style={{ font:"var(--fw-medium) 12px/1.4 var(--font-sans)", color:"var(--text-tertiary)", minWidth:110, flex:"none" }}>{label}</span>
+      <div style={{ flex:1 }}>
+        {options ? (
+          <select value={editForm[fieldKey]||""} onChange={e=>ef(fieldKey)(e.target.value)} style={{ ...selectBase, height:34, font:"13px/1 var(--font-sans)" }}>
+            {options.map(o=><option key={o}>{o}</option>)}
+          </select>
+        ) : (
+          <input type={type} value={editForm[fieldKey]||""} onChange={e=>ef(fieldKey)(e.target.value)}
+            style={{ ...inputBase, height:34, font:"13px/1 var(--font-sans)" }} />
+        )}
+      </div>
+    </div>
   );
 
   return (
     <Backdrop onClose={onClose} align="right">
-      <div onClick={e=>e.stopPropagation()} style={{ width:460, background:"var(--white)", height:"100%", overflow:"auto", boxShadow:"var(--shadow-lg)", animation:"pmSlide .22s ease" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)", position:"sticky", top:0, background:"var(--white)", zIndex:2 }}>
-          <div style={{ font:"var(--fw-bold) 17px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>회원 상세</div>
-          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
-        </div>
-
-        <div style={{ padding:"24px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:8 }}>
-            <Avatar name={member.name} size="lg" />
+      <div onClick={e=>e.stopPropagation()} style={{ width:580, background:"var(--white)", height:"100%", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmSlide .22s ease" }}>
+        {/* 헤더 */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px", borderBottom:"1px solid var(--border-subtle)", background:"var(--white)", zIndex:2, flex:"none" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <Avatar name={member.name} size="md" />
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ font:"var(--fw-bold) 20px/1.2 var(--font-sans)", color:"var(--text-primary)" }}>{member.name}</span>
+                <span style={{ font:"var(--fw-bold) 18px/1.2 var(--font-sans)", color:"var(--text-primary)" }}>{member.name}</span>
                 {member.isSenior && <span style={{ font:"10px/1 var(--font-sans)", color:"var(--green-500)", fontWeight:700, padding:"2px 6px", background:"#EAF7F0", borderRadius:5 }}>70세</span>}
                 <window.PMUI.MemberStatusChip status={member.status} />
               </div>
-              <div style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", marginTop:3 }}>{member.mgmtNo} · {member.sigun} · {member.membership}</div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:2 }}>{member.mgmtNo||member.mgmt_no} · {member.sigun} · {member.vehicleNo||member.vehicle_no}</div>
             </div>
           </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {loading && <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>로딩중…</span>}
+            {!editMode && <button onClick={startEdit} style={{ height:32, padding:"0 14px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", cursor:"pointer" }}>수정</button>}
+            <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} />
+            </button>
+          </div>
+        </div>
 
-          {/* 원장미수 / 수납합계 / 현재잔액 */}
-          <div style={{ display:"flex", gap:8, marginTop:16 }}>
-            {[["원장미수",won(D.ledgerArrears(member)),"var(--text-primary)","var(--grey-25)"],
-              ["수납합계",won(D.paidTotal(member)),"var(--green-500)","var(--green-50)"],
-              ["현재잔액",won(curBalance), curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--text-tertiary)", curBalance>0?"var(--red-50)":"var(--grey-25)"]].map(([l,v,c,bg])=>(
-              <div key={l} style={{ flex:1, padding:"12px 12px", borderRadius:"var(--radius-md)", background:bg, textAlign:"center" }}>
-                <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
-                <div style={{ font:"var(--fw-bold) 15px/1.1 var(--font-sans)", color:c, marginTop:4, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+        {/* 요약 카드 */}
+        <div style={{ display:"flex", gap:8, padding:"14px 24px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", flex:"none" }}>
+          {[
+            ["원장미수", won(ledgerArrears), "var(--text-primary)","var(--white)"],
+            ["수납합계", won(paidTotal), "var(--green-500)","#F0FBF5"],
+            ["현재잔액", won(curBalance), curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--text-tertiary)", curBalance>0?"#FEF0F0":"var(--white)"],
+            ["미수개월", arrearsMonths+"개월", "var(--text-primary)","var(--white)"],
+          ].map(([l,v,c,bg])=>(
+            <div key={l} style={{ flex:1, padding:"10px 12px", borderRadius:"var(--radius-md)", background:bg, border:"1px solid var(--border-subtle)", textAlign:"center" }}>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
+              <div style={{ font:"var(--fw-bold) 14px/1.1 var(--font-sans)", color:c, marginTop:3, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* 탭 */}
+        <div style={{ display:"flex", gap:0, padding:"0 24px", borderBottom:"1px solid var(--border-subtle)", flex:"none" }}>
+          {DETAIL_TABS.map(t=>(
+            <button key={t} type="button" onClick={()=>setTab(t)} style={{
+              border:"none", background:"none", cursor:"pointer", padding:"12px 14px", whiteSpace:"nowrap",
+              font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:tab===t?"var(--brand)":"var(--text-tertiary)",
+              borderBottom:tab===t?"2px solid var(--brand)":"2px solid transparent", marginBottom:-1,
+            }}>{t}</button>
+          ))}
+        </div>
+
+        {/* 탭 내용 — 스크롤 */}
+        <div style={{ flex:1, overflow:"auto", padding:"20px 24px" }}>
+          {/* ── 기본정보 탭 ── */}
+          {tab==="기본정보" && (
+            <div>
+              {saveError && (
+                <div style={{ padding:"10px 14px", background:"var(--red-50)", border:"1px solid var(--red-200)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--red-600)", marginBottom:16 }}>
+                  {saveError}
+                </div>
+              )}
+              {editMode ? (
+                <>
+                  <SectionLabel>기본 정보 수정</SectionLabel>
+                  <EditRow label="성명 *" fieldKey="name" />
+                  <EditRow label="지역" fieldKey="sigun" options={["", ...SIGUN_LIST]} />
+                  <EditRow label="차량번호" fieldKey="vehicle_no" />
+                  <EditRow label="관리번호" fieldKey="mgmt_no" />
+                  <EditRow label="핸드폰번호" fieldKey="phone" />
+                  <EditRow label="주소" fieldKey="address" />
+                  <EditRow label="공문주소" fieldKey="public_address" />
+                  <EditRow label="가입상태" fieldKey="status" options={["정상","폐업","양도","이관","탈퇴"]} />
+                  <EditRow label="회원구분" fieldKey="member_type" options={["개인","택배","대리"]} />
+                  <EditRow label="가입여부" fieldKey="membership" options={["협회가입","협회미가입"]} />
+                  <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid var(--border-subtle)", alignItems:"flex-start" }}>
+                    <span style={{ font:"var(--fw-medium) 12px/1.4 var(--font-sans)", color:"var(--text-tertiary)", minWidth:110, flex:"none", paddingTop:8 }}>비고</span>
+                    <textarea value={editForm.memo||""} onChange={e=>ef("memo")(e.target.value)} rows={3}
+                      style={{ flex:1, padding:"8px 12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1.5 var(--font-sans)", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }} />
+                  </div>
+                  <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                    <button onClick={cancelEdit} style={{ flex:1, height:38, borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>취소</button>
+                    <button onClick={saveEdit} disabled={saving} style={{ flex:2, height:38, borderRadius:"var(--radius-md)", border:"none", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 14px/1 var(--font-sans)", cursor:saving?"wait":"pointer" }}>
+                      {saving?"저장 중…":"저장"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <SectionLabel>회원 기본정보</SectionLabel>
+                  <InfoRow label="성명" value={member.name} strong />
+                  <InfoRow label="지역" value={member.sigun} />
+                  <InfoRow label="차량번호" value={member.vehicleNo||member.vehicle_no} strong mono />
+                  <InfoRow label="관리번호" value={member.mgmtNo||member.mgmt_no} mono />
+                  <InfoRow label="회원구분" value={member.memberType||member.member_type} />
+                  <InfoRow label="가입상태" value={member.membership} />
+                  <InfoRow label="회원상태" value={member.status} />
+                  <SectionLabel style={{ marginTop:20 }}>연락처 · 주소</SectionLabel>
+                  <InfoRow label="핸드폰번호" value={member.phone} />
+                  <InfoRow label="주소" value={member.address} />
+                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address} />
+                  <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
+                  <InfoRow label="자격증명 발급일" value={member.certIssueDate||member.cert_issue_date||"미발급"} />
+                  <InfoRow label="협회 가입일" value={member.assocJoinDate||member.assoc_join_date} />
+                  <InfoRow label="부과시작월" value={member.billingStartYm||member.billing_start_ym} />
+                  <InfoRow label="부과항목" value={member.chargeItem||member.charge_item} />
+                  <InfoRow label="월부과금" value={won(member.monthlyCharge||member.monthly_charge||0)} />
+                  <InfoRow label="70세 감면" value={member.isSenior?"예 (50% 감면)":"아니오"} />
+                  <InfoRow label="최근 납부월" value={member.lastPaymentYm||member.last_payment_ym} />
+                  <SectionLabel style={{ marginTop:20 }}>메모</SectionLabel>
+                  <div style={{ padding:"10px 14px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-secondary)", lineHeight:1.7, whiteSpace:"pre-wrap", minHeight:48 }}>
+                    {member.memo || "—"}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── 미수원장 탭 ── */}
+          {tab==="미수원장" && (
+            <div>
+              {/* 요약 */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+                {[
+                  ["총 원장미수", won(ledgerArrears), curBalance>0?"var(--red-500)":"var(--text-primary)"],
+                  ["수납합계", won(paidTotal), "var(--green-500)"],
+                  ["현재잔액", won(curBalance), curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--green-500)"],
+                  ["미수개월", arrearsMonths+"개월", "var(--text-primary)"],
+                ].map(([l,v,c])=>(
+                  <div key={l} style={{ padding:"12px 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-subtle)", background:"var(--white)" }}>
+                    <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
+                    <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:c, marginTop:4, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", textAlign:"center", marginTop:8 }}>원장미수 − 수납합계 = 현재잔액 · 미수 {D.arrearsMonths(member)}개월</div>
 
-          {/* 탭 */}
-          <div style={{ display:"flex", gap:6, marginTop:18, borderBottom:"1px solid var(--border-subtle)" }}>
-            {["미수","수납내역","정보"].map(t=>(
-              <button key={t} type="button" onClick={()=>setTab(t)} style={{ border:"none", background:"none", cursor:"pointer", padding:"8px 12px",
-                font:"var(--fw-demibold) 13px/1 var(--font-sans)", color: tab===t?"var(--brand)":"var(--text-tertiary)",
-                borderBottom: tab===t?"2px solid var(--brand)":"2px solid transparent", marginBottom:-1 }}>{t}{t==="수납내역"&&` ${(member.payments||[]).length}`}</button>
-            ))}
-          </div>
-
-          {tab==="미수" && (
-            <div style={{ marginTop:14 }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr>
-                  {["기준월","항목","금액","상태"].map((h,i)=><th key={h} style={{ textAlign:i===2?"right":"left", padding:"8px 6px", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>)}
+                  {["기준월","항목","부과금액","상태"].map((h,i)=>(
+                    <th key={h} style={{ textAlign:i===2?"right":"left", padding:"9px 10px", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-default)", background:"var(--grey-25)" }}>{h}</th>
+                  ))}
                 </tr></thead>
                 <tbody>
-                  {open.map((it)=>(
-                    <tr key={it.ym} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
-                      <td style={{ padding:"10px 6px", font:"var(--body-sm)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{it.ym}</td>
-                      <td style={{ padding:"10px 6px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{it.item}</td>
-                      <td style={{ padding:"10px 6px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color: it.amount<0?"var(--violet-500)":"var(--red-500)", fontVariantNumeric:"tabular-nums" }}>{won(it.amount)}</td>
-                      <td style={{ padding:"10px 6px" }}><window.PMUI.StatusPill status={it.amount<0?"선납":"미납"} /></td>
+                  {(member.arrears||[]).map((it,i)=>(
+                    <tr key={it.id||i} style={{ borderBottom:"1px solid var(--border-subtle)", background: it.paid||it.is_paid?"var(--grey-25)":"" }}>
+                      <td style={{ padding:"10px", font:"var(--body-sm)", fontVariantNumeric:"tabular-nums", color:"var(--text-primary)" }}>{it.ym}</td>
+                      <td style={{ padding:"10px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{it.charge_item||it.item}</td>
+                      <td style={{ padding:"10px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color: (it.paid||it.is_paid)?"var(--text-tertiary)":it.amount<0?"var(--violet-500)":"var(--red-500)", fontVariantNumeric:"tabular-nums" }}>{won(it.amount)}</td>
+                      <td style={{ padding:"10px" }}><window.PMUI.StatusPill status={(it.paid||it.is_paid)?"완납":it.amount<0?"선납":"미납"} /></td>
                     </tr>
                   ))}
-                  {open.length===0 && <tr><td colSpan={4} style={{ padding:"24px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>현재 미수금이 없습니다.</td></tr>}
+                  {!(member.arrears||[]).length && <tr><td colSpan={4} style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>미수 내역이 없습니다.</td></tr>}
                 </tbody>
               </table>
             </div>
           )}
 
+          {/* ── 수납내역 탭 ── */}
           {tab==="수납내역" && (
-            <div style={{ marginTop:14 }}>
-              {(member.payments||[]).length ? (member.payments||[]).map((p)=>(
-                <div key={p.id} style={{ display:"flex", gap:12, padding:"12px 0", borderBottom:"1px solid var(--border-subtle)" }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--green-500)", marginTop:6, flex:"none" }} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between" }}>
-                      <span style={{ font:"var(--fw-demibold) 13px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>{won(p.amount)} <span style={{ color:"var(--text-tertiary)", fontWeight:500 }}>· {p.chargeItem}</span></span>
-                      <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{p.paidDate}</span>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                      <window.PMUI.AccountingTag accounting={p.accounting} />
-                      <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>대상월 {p.paidForYm} · {p.method}</span>
-                    </div>
-                  </div>
+            <div>
+              {(member.payments||[]).length === 0 && (
+                <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>수납내역이 없습니다.</div>
+              )}
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>
+                  {["입금일","항목","납부방식","입금액"].map((h,i)=>(
+                    <th key={h} style={{ textAlign:i===3?"right":"left", padding:"9px 10px", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-default)", background:"var(--grey-25)" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {(member.payments||[]).map((p,i)=>(
+                    <tr key={p.id||i} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
+                      <td style={{ padding:"10px", font:"var(--body-sm)", color:"var(--text-secondary)", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{p.paidDate||p.paid_date}</td>
+                      <td style={{ padding:"10px" }}>
+                        <div style={{ font:"var(--fw-medium) 13px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>{p.chargeItem||p.charge_item}</div>
+                        <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>대상월 {p.paidForYm||p.paid_for_ym}</div>
+                      </td>
+                      <td style={{ padding:"10px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{p.method}</td>
+                      <td style={{ padding:"10px", textAlign:"right", font:"var(--fw-bold) 14px/1 var(--font-sans)", color:"var(--green-500)", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>+{won(p.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(member.payments||[]).length > 0 && (
+                <div style={{ display:"flex", justifyContent:"flex-end", padding:"12px 10px", borderTop:"1px solid var(--border-subtle)", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--green-500)" }}>
+                  합계 {won(paidTotal)}
                 </div>
-              )) : <div style={{ padding:"24px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>수납내역이 없습니다.</div>}
+              )}
             </div>
           )}
 
-          {tab==="정보" && (
+          {/* ── 처리이력 탭 ── */}
+          {tab==="처리이력" && (
             <div>
-              <SectionTitle>기본 정보</SectionTitle>
-              <Row label="차량번호" value={member.vehicleNo} strong />
-              <Row label="구분" value={member.memberType} />
-              <Row label="연락처" value={member.phone} />
-              <Row label="주소" value={member.address} />
-              <Row label="비고" value={member.note} />
-              <SectionTitle>자격 · 부과</SectionTitle>
-              <Row label="자격증명 발급일" value={member.certIssueDate || "미발급"} />
-              <Row label="협회 가입일" value={member.assocJoinDate} />
-              <Row label="계정 / 월부과금" value={`${member.chargeItem} / ${won(member.monthlyCharge)}`} strong />
-              <Row label="70세 감면" value={member.isSenior?"예 (50% 감면)":"아니오"} />
-              <Row label="결번 / 자격증명" value={`${member.disconnected?"결번":"정상"} / ${member.certMissing?"미발급":"발급"}`} />
-              <Row label="최근 납부월" value={member.lastPaymentYm} />
+              <HistoryTab memberId={member.id} />
             </div>
           )}
         </div>
 
-        <div style={{ position:"sticky", bottom:0, padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
-          <Button variant="tertiary" size="medium" onClick={()=>onClosure(member)}>폐업/이탈</Button>
+        {/* 하단 버튼 */}
+        <div style={{ flex:"none", padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
+          <button onClick={()=>onClosure(member)} style={{ height:38, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>폐업/이탈</button>
           <Button variant="primary" size="medium" fullWidth leadingIcon="dollar" onClick={()=>onPay(member)}>수납 반영</Button>
         </div>
       </div>
@@ -272,46 +459,110 @@ function MemberDetail({ member, onClose, onPay, onClosure }){
   );
 }
 
+function SectionLabel({ children, style }) {
+  return <div style={{ font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4, marginTop:16, ...style }}>{children}</div>;
+}
+
+function HistoryTab({ memberId }) {
+  const [history, setHistory] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!memberId) { setLoading(false); return; }
+    fetch(`/api/members/${memberId}/history`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setHistory(Array.isArray(data) ? data : []))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, [memberId]);
+
+  if (loading) return <div style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)" }}>로딩중…</div>;
+  if (!history.length) return <div style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>처리이력이 없습니다.</div>;
+
+  return (
+    <div>
+      {history.map((h,i) => (
+        <div key={h.id||i} style={{ display:"flex", gap:12, padding:"10px 0", borderBottom:"1px solid var(--border-subtle)" }}>
+          <div style={{ width:6, height:6, borderRadius:"50%", background:"var(--brand)", marginTop:6, flex:"none" }} />
+          <div style={{ flex:1 }}>
+            <div style={{ font:"var(--body-sm)", color:"var(--text-primary)", lineHeight:1.5 }}>{h.content}</div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:3 }}>
+              {h.actor && `${h.actor} · `}{h.created_at ? new Date(h.created_at).toLocaleString("ko-KR") : ""}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ===== 폐업/이탈 등록 모달 =====
-function ClosureModal({ member, onClose, onConfirm }){
-  const D = window.PMData; const { won } = D;
+function ClosureModal({ member, onClose, onConfirm }) {
+  const D = window.PMData;
+  const { won } = D;
   const [type, setType] = React.useState("폐업");
+  const [processDate, setProcessDate] = React.useState("2026-06-24");
   const [docNo, setDocNo] = React.useState("");
-  const [content, setContent] = React.useState("시청 접수 후 처리");
+  const [content, setContent] = React.useState("");
   const [notifyLater, setNotifyLater] = React.useState(D.outstanding(member)>0);
+  const balance = D.outstanding(member);
+
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:440, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:460, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>폐업 / 이탈 등록</div>
-          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
+          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} />
+          </button>
         </div>
-        <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:14 }}>
           <div style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{member.name} · {member.sigun} · {member.vehicleNo}</div>
+
           <div>
-            <label style={fieldLabel}>처리사유</label>
+            <label style={fieldLabel}>처리구분 *</label>
             <div style={{ display:"flex", gap:6 }}>
               {["폐업","탈퇴","양도","이관"].map(t=>(
                 <button key={t} type="button" onClick={()=>setType(t)} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", cursor:"pointer",
-                  border: type===t?"1.5px solid var(--brand)":"1px solid var(--border-default)", background: type===t?"var(--brand-subtle)":"var(--white)",
-                  color: type===t?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{t}</button>
+                  border:type===t?"1.5px solid var(--brand)":"1px solid var(--border-default)",
+                  background:type===t?"var(--brand-subtle)":"var(--white)",
+                  color:type===t?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{t}</button>
               ))}
             </div>
           </div>
-          <div><label style={fieldLabel}>공문/접수번호</label><input value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="예: 접수2026-114" style={inputBase} /></div>
-          <div><label style={fieldLabel}>내용</label><input value={content} onChange={e=>setContent(e.target.value)} style={inputBase} /></div>
-          <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-            <input type="checkbox" checked={notifyLater} onChange={e=>setNotifyLater(e.target.checked)} style={{ width:18, height:18, accentColor:"var(--brand)" }} />
-            <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>미납잔액 추후 안내 대상</span>
-          </label>
+
+          <div style={{ display:"flex", gap:12 }}>
+            <div style={{ flex:1 }}>
+              <label style={fieldLabel}>처리일 *</label>
+              <input type="date" value={processDate} onChange={e=>setProcessDate(e.target.value)} style={inputBase} />
+            </div>
+            <div style={{ flex:1 }}>
+              <label style={fieldLabel}>공문/접수번호</label>
+              <input value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="예: 접수2026-114" style={inputBase} />
+            </div>
+          </div>
+
+          <div>
+            <label style={fieldLabel}>처리내용 / 사유</label>
+            <textarea value={content} onChange={e=>setContent(e.target.value)} rows={2} placeholder="사유를 입력하면 처리이력에 기록됩니다"
+              style={{ width:"100%", padding:"10px 12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }} />
+          </div>
+
+          {balance > 0 && (
+            <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+              <input type="checkbox" checked={notifyLater} onChange={e=>setNotifyLater(e.target.checked)} style={{ width:18, height:18, accentColor:"var(--brand)" }} />
+              <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>미납잔액 <b style={{ color:"var(--red-500)" }}>{won(balance)}</b> — 추심대상으로 자동 이동</span>
+            </label>
+          )}
+
           <div style={{ padding:"12px 14px", background:"var(--amber-50)", borderRadius:"var(--radius-md)", display:"flex", gap:8 }}>
             <Icon name="secure" size={18} color="#B9791A" style={{ flex:"none" }} />
-            <span style={{ font:"var(--body-sm)", color:"#946012" }}>현재 미수잔액 <b>{won(D.outstanding(member))}</b> 기준으로 폐업현황에 저장됩니다. 회원 데이터는 삭제하지 않고 상태만 변경합니다.</span>
+            <span style={{ font:"var(--body-sm)", color:"#946012" }}>회원 데이터는 삭제하지 않고 상태만 변경합니다. 처리이력이 남습니다.</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:10, padding:"16px 24px", borderTop:"1px solid var(--border-subtle)" }}>
           <Button variant="tertiary" size="medium" fullWidth onClick={onClose}>취소</Button>
-          <Button variant="primary" size="medium" fullWidth onClick={()=>onConfirm(member, { type, docNo, content, notifyLater })}>처리 저장</Button>
+          <Button variant="primary" size="medium" fullWidth onClick={()=>onConfirm(member, { type, processDate, docNo, content, notifyLater })}>처리 저장</Button>
         </div>
       </div>
     </Backdrop>

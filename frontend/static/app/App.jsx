@@ -150,7 +150,7 @@ function App(){
       {route==="settings" && <SettingsView />}
 
       {payTarget && <window.PayModal member={payTarget} onClose={()=>setPayTarget(null)} onConfirm={confirmPay} />}
-      {detail && <window.MemberDetail member={detail} onClose={()=>setDetail(null)} onPay={(m)=>setPayTarget(m)} onClosure={(m)=>setCloseTarget(m)} />}
+      {detail && <window.MemberDetail member={detail} onClose={()=>setDetail(null)} onPay={(m)=>setPayTarget(m)} onClosure={(m)=>setCloseTarget(m)} onUpdate={(updated)=>{ setMembers(ms=>ms.map(m=>m.id===updated.id?{...m,...updated}:m)); setDetail(updated); }} onToast={showToast} />}
       {closeTarget && <window.ClosureModal member={closeTarget} onClose={()=>setCloseTarget(null)} onConfirm={registerClosure} />}
 
       {toast && (

@@ -264,6 +264,13 @@ def apply_payment(member_id: str, payload: PaymentApply, db: Session = Depends(g
     return {"ok": True, "paid_count": paid_count, "applied": applied, "remain": remain, "member": get_member(member_id, db)}
 
 
+@router.get("/{member_id}/history")
+def get_member_history(member_id: str, db: Session = Depends(get_db)):
+    stmt = select(MemberHistory).where(MemberHistory.member_id == member_id).order_by(MemberHistory.at.desc()).limit(100)
+    rows = db.scalars(stmt).all()
+    return [{"id": h.id, "content": h.content, "actor": h.actor, "created_at": h.at.isoformat() if h.at else None} for h in rows]
+
+
 @router.post("/{member_id}/closure")
 def register_closure(member_id: str, payload: ClosureCreate, db: Session = Depends(get_db)):
     stmt = select(Member).options(selectinload(Member.receivable_items)).where(Member.id == member_id)
