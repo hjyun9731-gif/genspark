@@ -7,8 +7,10 @@ const NAV = [
   { id: "regional",  icon: "earth",       label: "지역별 · 문자" },
   { id: "bank",      icon: "card",        label: "통장매칭" },
   { id: "closure",   icon: "warning",     label: "폐업현황" },
+  { id: "pending",   icon: "add-user",    label: "신규 · 예정자" },
   { id: "history",   icon: "transactions",label: "수납 내역" },
   { id: "upload",    icon: "cloud",       label: "엑셀 업로드" },
+  { id: "certprint", icon: "document",    label: "자격증명 인쇄" },
 ];
 
 function BrandMark(){
@@ -64,6 +66,10 @@ function AppShell({ active, onNavigate, title, subtitle, headerRight, children, 
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12, flex:"none" }}>
             {headerRight}
+            <a href="모바일.html" title="모바일 화면" style={{ display:"inline-flex", alignItems:"center", gap:7, height:42, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", textDecoration:"none", whiteSpace:"nowrap" }}>
+              <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><rect x="0.7" y="0.7" width="12.6" height="16.6" rx="2.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="14" r="1" fill="currentColor"/></svg>
+              모바일
+            </a>
             <IconButton icon="bell" variant="outline" />
           </div>
         </header>

@@ -9,9 +9,9 @@ FastAPI 진입점 (main)
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
@@ -20,7 +20,23 @@ from .routers import closures, dashboard, deposits, imports, members, pending, p
 
 settings = get_settings()
 
+import logging
+import time
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("misu")
+
 app = FastAPI(title=settings.app_name)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    ms = int((time.time() - start) * 1000)
+    logger.info(f"{request.method} {request.url.path} → {response.status_code} ({ms}ms)")
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,13 +67,22 @@ def health():
 
 # ---- 프론트 정적 서빙 (빌드 산출물이 있을 때만) ----
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# JSX/JS 파일은 브라우저 캐시를 막아 항상 최신 버전을 받게 한다.
+_NO_CACHE_EXTS = {".jsx", ".js", ".html"}
+
 if STATIC_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
     def spa(full_path: str):
-        # SPA 라우팅: 정적 파일 없으면 index.html 반환
         candidate = STATIC_DIR / full_path
         if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(STATIC_DIR / "index.html")
+            resp = FileResponse(candidate)
+            if Path(full_path).suffix in _NO_CACHE_EXTS:
+                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+                resp.headers["Pragma"] = "no-cache"
+            return resp
+        resp = FileResponse(STATIC_DIR / "index.html")
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp

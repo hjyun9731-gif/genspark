@@ -304,7 +304,7 @@ def _current_max_member_no(db: Session) -> int:
 
 def _make_mgmt_no(raw: str, fallback_no: int) -> str:
     s = _clean(raw)
-    return (s or f"신26-{fallback_no:03d}")[:16]
+    return (s or f"관리번호미상-{fallback_no:03d}")[:16]
 
 
 def _read_workbook(file_bytes: bytes):
@@ -520,41 +520,57 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     if not raw_rows:
         return []
     keys = list(raw_rows[0].keys())
+
+    # 거래일자
     date_key = _pick_col(keys, ["거래일자", "입금일", "수납일", "승인일자", "정산일자", "날짜", "일자"])
-    # 통장: 입금자명/거래기록사항/거래내용, 카드: 이름/성명
-    name_key = _pick_col(keys, ["입금자명", "입금자", "예금주", "거래기록사항", "거래기록", "적요", "내용", "성명", "이름"])
-    # 출금금액/잔액은 제외하고 입금/승인/정산/수납 금액 우선
-    amt_key = _pick_col(keys, ["입금금액", "입금액", "수납금액", "승인금액", "정산금액", "금액"], excludes=["출금", "잔액", "수수료"])
-    memo_key = _pick_col(keys, ["거래내용", "적요", "내용", "비고", "메모", "카드사", "거래점"])
-    record_key = _pick_col(keys, ["거래기록사항", "거래기록", "기록", "가맹점번호", "할부", "거래시간"])
+
+    # 입금금액 우선, 출금금액/잔액은 절대 사용하지 않는다
+    amt_key = None
+    for candidate in ["입금금액", "입금액", "수납금액", "승인금액", "정산금액"]:
+        found = _pick_col(keys, [candidate], excludes=["출금", "잔액", "수수료", "잔"])
+        if found:
+            amt_key = found
+            break
+    if not amt_key:
+        # fallback: 금액 포함 컬럼 중 출금/잔액이 아닌 것
+        amt_key = _pick_col(keys, ["금액"], excludes=["출금", "잔액", "수수료", "후"])
+
+    # 거래기록사항(실제 입금자명) > 거래내용 순
+    # 거래점(농협/신한 등 은행명)은 입금자명으로 쓰면 안 됨
+    name_key = _pick_col(keys, ["거래기록사항", "기록사항", "입금자명", "입금자", "예금주"])
+    fallback_name_key = _pick_col(keys, ["거래내용", "적요", "내용"], excludes=["거래점", "점"])
+
+    memo_key = _pick_col(keys, ["거래내용", "적요", "내용", "메모"])
+    location_key = _pick_col(keys, ["거래점", "가맹점"])
+    balance_key = _pick_col(keys, ["거래 후 잔액", "잔액", "잔"])
 
     rows: list[dict[str, Any]] = []
     for r in raw_rows:
-        name = _clean(r.get(name_key)) if name_key else ""
-        # 통장 양식에서 거래내용은 NH콕송금, 거래기록사항이 실제 입금자명일 때가 많다.
-        # 이름 컬럼이 비어 있으면 기록/메모에서 후보 문자열을 가져온다.
-        if not name and record_key:
-            name = _clean(r.get(record_key))
         amount = _money(r.get(amt_key)) if amt_key else 0
-        if not name or amount <= 0:
+        if amount <= 0:
+            # 입금금액 0 또는 없음 = 출금 행 → 수납매칭 제외
             continue
-        memo_parts = []
-        for k in [memo_key, record_key]:
-            if k and r.get(k) not in (None, ""):
-                memo_parts.append(f"{k}:{_clean(r.get(k))}")
-        original = []
-        for k, v in r.items():
-            val = _clean(v)
-            if val:
-                original.append(f"{k}:{val}")
+
+        # 입금자명: 거래기록사항 우선, 비어있으면 거래내용
+        name = _clean(r.get(name_key)) if name_key else ""
+        if not name and fallback_name_key:
+            name = _clean(r.get(fallback_name_key))
+        if not name:
+            name = "입금자미상"
+
+        needs_review = amount > 1_000_000
+
         rows.append({
             "거래일자": _clean(r.get(date_key)) if date_key else "",
             "입금자명": name,
             "입금액": amount,
+            "출금액": 0,  # 출금행은 이미 제외됨
             "거래내용": _clean(r.get(memo_key)) if memo_key else "",
-            "거래기록사항": _clean(r.get(record_key)) if record_key else "",
+            "거래기록사항": _clean(r.get(name_key)) if name_key else "",
+            "거래점": _clean(r.get(location_key)) if location_key else "",
             "원본구분": "카드매출" if any("카드" in _norm_col(k) or "승인" in _norm_col(k) for k in keys) else "통장거래",
-            "원본메모": " / ".join(original)[:900],
+            "원본메모": " / ".join(f"{k}:{_clean(v)}" for k, v in r.items() if _clean(v))[:900],
+            "검토필요": "고액(100만원초과)" if needs_review else "",
         })
     return rows
 
