@@ -29,6 +29,8 @@ def _closure_dict(c: Closure) -> dict:
         "name": m.name if m else "",
         "vehicleNo": m.vehicle_no if m else "",
         "vehicle_no": m.vehicle_no if m else "",
+        "mgmtNo": m.mgmt_no if m else "",
+        "mgmt_no": m.mgmt_no if m else "",
         "sigun": m.sigun if m else "",
         "type": c.type,
         "processDate": c.process_date.isoformat(),

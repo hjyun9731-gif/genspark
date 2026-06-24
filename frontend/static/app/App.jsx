@@ -23,10 +23,11 @@ const TITLES = {
 function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [route, setRoute] = React.useState("dashboard");
-  const [members, setMembers] = React.useState(D.MEMBERS);
-  const [deposits, setDeposits] = React.useState(D.DEPOSITS);
-  const [closures, setClosures] = React.useState(D.CLOSURES);
-  const [pending, setPending] = React.useState(D.PENDING);
+  const [members, setMembers] = React.useState([]);
+  const [deposits, setDeposits] = React.useState([]);
+  const [closures, setClosures] = React.useState([]);
+  const [pending, setPending] = React.useState([]);
+  const [dataLoading, setDataLoading] = React.useState(true);
   const [drill, setDrill] = React.useState(null);
   const [payTarget, setPayTarget] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
@@ -43,6 +44,25 @@ function App(){
 
   const agg = React.useMemo(()=>D.aggregate(members), [members]);
   const showToast = (msg)=>{ setToast(msg); setTimeout(()=>setToast(null), 3200); };
+
+  const refetchAll = React.useCallback(async (msg) => {
+    setDataLoading(true);
+    try {
+      const [mRes, cRes] = await Promise.all([
+        fetch('/api/members?size=5000'),
+        fetch('/api/closures'),
+      ]);
+      if (mRes.ok) setMembers(await mRes.json());
+      if (cRes.ok) setClosures(await cRes.json());
+      if (msg) { setToast(msg); setTimeout(()=>setToast(null), 3200); }
+    } catch(e) {
+      setToast('데이터 로드 실패: 서버 연결을 확인하세요.'); setTimeout(()=>setToast(null), 3200);
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { refetchAll(); }, []);
 
   const goList = (filter)=>{ setDrill({ ...filter, _k: Date.now() }); setRoute("list"); };
 
@@ -126,7 +146,12 @@ function App(){
     showToast(`${member.name} 님 ${payload.type} 처리 · 폐업현황에 저장 (미납잔액 ${won(bal)})`);
   };
 
-  const handleApply = ()=> showToast("엑셀 반영 완료 · 기존 데이터 유지, 변경사항만 업데이트");
+  const handleApply = (json)=>{
+    const msg = json
+      ? `반영 완료: 회원 ${json.inserted||0}건 신규, ${json.updated||0}건 수정, 미수 ${json.arrears_inserted||json.inserted||0}건 저장`
+      : '엑셀 반영 완료';
+    refetchAll(msg);
+  };
 
   const [title, subtitle] = TITLES[route];
 
@@ -138,8 +163,9 @@ function App(){
     <window.AppShell active={route} onNavigate={(id)=>{ setRoute(id); setDrill(null); }}
       title={title} subtitle={subtitle} headerRight={headerRight} density={t.density}>
 
-      {route==="dashboard" && <window.Dashboard agg={agg} members={members} deposits={deposits} closures={closures} onDrill={goList} onNav={setRoute} year={year} month={month} />}
-      {route==="list" && <window.Receivables members={members} drill={drill} density={t.density} onPay={setPayTarget} onSelect={setDetail} onToast={showToast} />}
+      {dataLoading && <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"80px 0", color:"var(--text-tertiary)", font:"var(--body-md)" }}>데이터를 불러오는 중...</div>}
+      {!dataLoading && route==="dashboard" && <window.Dashboard agg={agg} members={members} deposits={deposits} closures={closures} onDrill={goList} onNav={setRoute} year={year} month={month} />}
+      {!dataLoading && route==="list" && <window.Receivables members={members} drill={drill} density={t.density} onPay={setPayTarget} onSelect={setDetail} onToast={showToast} />}
       {route==="regional" && <window.Regional members={members} onToast={showToast} />}
       {route==="bank" && <window.BankMatching deposits={deposits} members={members} onMatch={matchDeposit} onGroupMatch={matchDepositGroup} onExclude={excludeDeposit} onReset={resetBank} onPaste={pasteDeposits} onToast={showToast} />}
       {route==="closure" && <window.Closures closures={closures} onRestore={restoreClosure} onStatusChange={(id,patch)=>setClosures(cs=>cs.map(c=>c.id===id?{...c,...patch}:c))} onToast={showToast} />}
