@@ -51,7 +51,7 @@ function App(){
     setDataLoading(true);
     try {
       const [mRes, cRes, dRes, rRes, depRes] = await Promise.all([
-        fetch('/api/members?size=5000'),
+        fetch('/api/members?page=1&size=100'),
         fetch('/api/closures'),
         fetch('/api/dashboard/summary'),
         fetch('/api/dashboard/by-sigun'),

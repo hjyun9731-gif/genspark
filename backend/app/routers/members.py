@@ -2,6 +2,7 @@
 
 from datetime import date
 
+import math
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -47,6 +48,13 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
     paid_items = [x for x in member.receivable_items if x.is_paid]
     # 미수금명단 표시용 현재잔액: 0원/선입금(-금액)도 회원이 사라지면 안 되므로 음수까지 반영한다.
     arrears_amount = sum(x.amount for x in balance_items)
+    # MISU_CRITICAL_PATCH_ARREARS_MONTHS: 미수월수는 화면별 계산 금지.
+    # 2026 미수금이 한 줄 현재잔액으로 들어온 경우 len(open_items)=1이 되므로,
+    # 금액/monthly_charge 기준도 함께 적용해 목록/상세/대시보드 값을 통일한다.
+    monthly_charge_for_months = int(member.monthly_charge or 0)
+    amount_based_months = math.ceil(max(int(arrears_amount or 0), 0) / monthly_charge_for_months) if monthly_charge_for_months > 0 else 0
+    arrears_months_common = max(len(open_items), amount_based_months)
+
     out = {
         # DB 원본 필드
         "id": member.id,
@@ -83,9 +91,9 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         "lastPaymentYm": member.last_payment_ym,
         "disconnected": member.is_disconnected,
         "certMissing": member.cert_missing,
-        "arrears_months": len(open_items),
+        "arrears_months": arrears_months_common,
         "arrears_amount": arrears_amount,
-        "arrearsMonths": len(open_items),
+        "arrearsMonths": arrears_months_common,
         "totalArrears": arrears_amount,
         "age": (date.today().year - member.birth_year) if member.birth_year else None,
         "updatedAt": member.updated_at.isoformat() if member.updated_at else "",
