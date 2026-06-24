@@ -516,7 +516,7 @@ def create_deposits(payload: dict = Body(...), db: Session = Depends(get_db)):
         if not isinstance(row, dict):
             skipped += 1
             continue
-        amount = row.get("deposit_amount") or row.get("depositAmount") or row.get("입금금액") or row.get("입금액") or row.get("amount") or 0  # MISU_CRITICAL_PATCH: 거래 후 잔액 금지, 입금금액 우선
+        amount = row.get("amount") or row.get("입금액") or 0
         try:
             amount = int(re.sub(r"[^0-9\-]", "", str(amount)) or 0)
         except Exception:
@@ -526,7 +526,7 @@ def create_deposits(payload: dict = Body(...), db: Session = Depends(get_db)):
             continue
         d = Deposit(
             deposit_date=_parse_deposit_date(row.get("deposit_date") or row.get("depositDate") or row.get("거래일자")),
-            depositor_name=_short(row.get("거래기록사항") or row.get("거래내용") or row.get("depositor_name") or row.get("depositorName") or row.get("입금자명") or row.get("memo"), 40) or "미확인",  # MISU_CRITICAL_PATCH: 거래점/은행명보다 기록사항 우선
+            depositor_name=_short(row.get("depositor_name") or row.get("depositorName") or row.get("입금자명") or row.get("memo") or row.get("거래기록사항"), 40) or "미확인",
             amount=amount,
             memo=_short(row.get("memo") or row.get("거래기록사항") or row.get("description") or row.get("거래내용"), 60),
             status="대기",
