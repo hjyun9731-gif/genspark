@@ -1,4 +1,4 @@
-"""회원 / 미수금명단 라우터 — 실제 DB 기반 목록/상세/수납/폐업."""
+﻿"""회원 / 미수금명단 라우터 — 실제 DB 기반 목록/상세/수납/폐업."""
 
 from datetime import date
 
@@ -354,3 +354,4 @@ def register_closure(member_id: str, payload: ClosureCreate, db: Session = Depen
     db.add(MemberHistory(member_id=member.id, content=f"{payload.type} 처리 / 미수잔액 {unpaid:,}원", actor="system"))
     db.commit()
     return {"ok": True, "closure_id": closure.id, "unpaid_balance": unpaid, "notify_later": closure.notify_later}
+
