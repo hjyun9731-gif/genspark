@@ -142,7 +142,7 @@ function App(){
       {route==="list" && <window.Receivables members={members} drill={drill} density={t.density} onPay={setPayTarget} onSelect={setDetail} onToast={showToast} />}
       {route==="regional" && <window.Regional members={members} onToast={showToast} />}
       {route==="bank" && <window.BankMatching deposits={deposits} members={members} onMatch={matchDeposit} onGroupMatch={matchDepositGroup} onExclude={excludeDeposit} onReset={resetBank} onPaste={pasteDeposits} onToast={showToast} />}
-      {route==="closure" && <window.Closures closures={closures} onRestore={restoreClosure} onDelete={deleteClosure} onToast={showToast} />}
+      {route==="closure" && <window.Closures closures={closures} onRestore={restoreClosure} onStatusChange={(id,patch)=>setClosures(cs=>cs.map(c=>c.id===id?{...c,...patch}:c))} onToast={showToast} />}
       {route==="pending" && <window.Pending pending={pending} onAdd={addPending} onUpdate={updatePending} onDelete={deletePending} onPromote={promotePending} onToast={showToast} />}
       {route==="certprint" && <window.CertPrint onToast={showToast} />}
       {route==="upload" && <window.Upload onApply={handleApply} />}
