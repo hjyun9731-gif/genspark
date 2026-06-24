@@ -3,7 +3,7 @@
 from datetime import date
 
 import math
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,6 +36,20 @@ def _fix_reversed_future_date(d: date | None) -> date | None:
 def _date_iso(d: date | None) -> str | None:
     fixed = _fix_reversed_future_date(d)
     return fixed.isoformat() if fixed else None
+
+
+def _memo_field(memo: str | None, labels: list[str]) -> str | None:
+    raw = str(memo or "")
+    if not raw:
+        return None
+    for label in labels:
+        # 메모에 저장된 "주소:... / 공문 주소:..." 형태를 다시 화면 필드로 복원한다.
+        m = re.search(rf"(?:^|\s*/\s*){re.escape(label)}\s*[:：]\s*([^/]+)", raw)
+        if m:
+            v = m.group(1).strip()
+            if v:
+                return v[:300]
+    return None
 
 
 def _open_items(member: Member) -> list[ReceivableItem]:
@@ -78,6 +92,13 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         "is_disconnected": member.is_disconnected,
         "cert_missing": member.cert_missing,
         "memo": member.memo,
+        "address": _memo_field(member.memo, ["주소", "주 소"]),
+        "public_address": _memo_field(member.memo, ["공문 주소", "공문주소"]),
+        "publicAddress": _memo_field(member.memo, ["공문 주소", "공문주소"]),
+        "resident_no": _memo_field(member.memo, ["주민등록번호", "주민번호"]),
+        "residentNo": _memo_field(member.memo, ["주민등록번호", "주민번호"]),
+        "cert_issue_no": _memo_field(member.memo, ["자격증명 발급번호", "자격증명발급번호"]),
+        "certIssueNo": _memo_field(member.memo, ["자격증명 발급번호", "자격증명발급번호"]),
         # 프론트 기존 화면 호환 camelCase 필드
         "mgmtNo": member.mgmt_no,
         "vehicleNo": member.vehicle_no,
@@ -136,13 +157,14 @@ def list_members(
     page: int = 1,
     size: int = 1000,
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     stmt = select(Member).options(selectinload(Member.receivable_items), selectinload(Member.payments))
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
             (Member.name.like(like)) | (Member.vehicle_no.like(like)) |
-            (Member.mgmt_no.like(like)) | (Member.phone.like(like))
+            (Member.mgmt_no.like(like)) | (Member.phone.like(like)) | (Member.memo.like(like))
         )
     if sigun:
         stmt = stmt.where(Member.sigun == sigun)
@@ -167,13 +189,14 @@ def list_members(
         )
         stmt = stmt.where(Member.id.not_in(arrears_subq))
 
-    stmt = stmt.order_by(Member.sigun, Member.name).offset((page - 1) * size).limit(size)
-    result = []
+    # Python 레벨 금액/개월 필터를 정확히 적용하기 위해 먼저 전체 후보를 계산하고,
+    # 그 다음 페이지네이션한다. 3~4천 명 규모라 충분히 안전하며 X-Total-Count로 전체 건수를 내려준다.
+    stmt = stmt.order_by(Member.sigun, Member.name)
+    filtered = []
     for m in db.scalars(stmt).unique().all():
         d = _member_dict(m)
         bal = d["arrears_amount"]
         months = d["arrears_months"]
-        # 잔액 필터 (DB에서 정확한 집계 후 Python 레벨에서 추가 필터)
         if min_balance is not None and bal < min_balance:
             continue
         if max_balance is not None and bal > max_balance:
@@ -186,8 +209,14 @@ def list_members(
             continue
         if max_months is not None and months > max_months:
             continue
-        result.append(d)
-    return result
+        filtered.append(d)
+    total = len(filtered)
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total)
+        response.headers["X-Page"] = str(page)
+        response.headers["X-Page-Size"] = str(size)
+    start = max(page - 1, 0) * size
+    return filtered[start:start + size]
 
 
 @router.get("/{member_id}")

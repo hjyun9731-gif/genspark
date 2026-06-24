@@ -66,7 +66,7 @@ function TabRegional({ members, onToast }) {
     const lines = [head.join(",")];
     groups.forEach(g => g.rows.forEach(m => {
       const out = D.outstanding(m);
-      lines.push([g.region,m.mgmtNo,m.name,m.vehicleNo,m.membership,m.chargeItem,out,m.phone||"-",m.address,m.note].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","));
+      lines.push([g.region,m.mgmtNo,m.name,(m.vehicleNo||m.vehicle_no),m.membership,(m.chargeItem||m.charge_item),out,m.phone||"-",m.address,m.note].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","));
     }));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"}));
@@ -136,7 +136,7 @@ function TabRegional({ members, onToast }) {
                       <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
                         <td style={{ padding:"10px 20px", font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{m.mgmtNo}</td>
                         <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
                         <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.membership}</td>
                         <td style={{ padding:"10px 20px" }}><ChargeTag item={m.chargeItem} /></td>
                         <td style={{ padding:"10px 20px", textAlign:"right", whiteSpace:"nowrap", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:out>0?"var(--red-500)":out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
@@ -189,7 +189,7 @@ function TabSms({ members, onToast }) {
     const lines = [head.join(",")];
     groups.forEach(g => g.rows.forEach(m => {
       const out = D.outstanding(m);
-      lines.push([g.region,m.name,m.vehicleNo,m.phone||"-",out,`[화물협회] ${m.name}님 미수금 ${won(out)} 납부 안내드립니다.`].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","));
+      lines.push([g.region,m.name,(m.vehicleNo||m.vehicle_no),m.phone||"-",out,`[화물협회] ${m.name}님 미수금 ${won(out)} 납부 안내드립니다.`].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","));
     }));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"}));
@@ -254,7 +254,7 @@ function TabSms({ members, onToast }) {
                   return (
                     <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
                       <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo}</td>
+                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
                       <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.phone||"—"}</td>
                       <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(out)}</td>
                     </tr>
@@ -367,18 +367,18 @@ function TabAltoran({ members, onToast }) {
     const chargeMap = { "협회비": 0, "관리비": 0, "70세": 0 };
 
     // Sheet1
-    const sheet1Headers = ["코드","상호","대표자명","기타사원","핸드폰","거래처구분","품목코드","지로발행명목","규격","발행연월일","발행금액"];
+    const sheet1Headers = ["코드","상호","대표자명","기타사원","핸드폰","거래처구분","품목 코드","지로발행명목","규격(월분)","발행연월일","발행금액"];
     const sheet1Data = [sheet1Headers];
     eligible.forEach((m, idx) => {
       const amt = m.arrears_amount ?? m.totalArrears ?? 0;
       const chargeItem = m.chargeItem || m.charge_item || "협회비";
       if (chargeMap.hasOwnProperty(chargeItem)) chargeMap[chargeItem] += amt;
       sheet1Data.push([
-        idx + 1,
+        String(idx + 1).padStart(6,"0"),
         m.vehicleNo || m.vehicle_no || "",
         m.name || "",
         chargeItem,
-        m.phone || "",
+        (m.phone || m.mobile || m.tel || ""),
         "S",
         "00005",
         chargeItem,
@@ -400,12 +400,12 @@ function TabAltoran({ members, onToast }) {
     const totalAmt = eligible.reduce((s,m) => s + (m.arrears_amount ?? m.totalArrears ?? 0), 0);
     const summaryData = [
       ["항목", "건수/금액"],
-      ["입력건수", eligible.length],
-      ["협회비 합계", chargeMap["협회비"]],
-      ["관리비 합계", chargeMap["관리비"]],
-      ["70세 합계", chargeMap["70세"]],
-      ["발행금액합계", totalAmt],
-      ["핸드폰없음 제외", noPhone],
+      ["입력 건수", eligible.length],
+      ["협회비", chargeMap["협회비"]],
+      ["관리비", chargeMap["관리비"]],
+      ["70세", chargeMap["70세"]],
+      ["발행금액 합계", totalAmt],
+      ["핸드폰번호 없음 제외", noPhone],
       ["발행월", monthLabel],
       ["발행연월일", issueDate],
     ];
@@ -544,9 +544,25 @@ function TabExcluded({ members, onToast }) {
 // ── 메인 Regional 컴포넌트 ────────────────────────────────────────
 function Regional({ members, onToast }) {
   const [activeTab, setActiveTab] = React.useState(0);
+  const [regionalMembers, setRegionalMembers] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch('/api/members?status=정상&size=6000&include_zero=true&include_prepaid=true')
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => { if (alive) setRegionalMembers(Array.isArray(data) ? data : []); })
+      .catch(() => { if (alive) setRegionalMembers(members || []); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const sourceMembers = regionalMembers || members || [];
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      {loading && <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역별·문자 대상 전체 데이터를 불러오는 중입니다...</div>}
       {/* 탭 네비게이션 */}
       <div style={{ display:"flex", gap:0, borderBottom:"2px solid var(--border-subtle)" }}>
         {TABS_NAV.map((t,i)=>(
@@ -560,10 +576,10 @@ function Regional({ members, onToast }) {
         ))}
       </div>
 
-      {activeTab===0 && <TabRegional members={members} onToast={onToast} />}
-      {activeTab===1 && <TabSms members={members} onToast={onToast} />}
-      {activeTab===2 && <TabAltoran members={members} onToast={onToast} />}
-      {activeTab===3 && <TabExcluded members={members} onToast={onToast} />}
+      {activeTab===0 && <TabRegional members={sourceMembers} onToast={onToast} />}
+      {activeTab===1 && <TabSms members={sourceMembers} onToast={onToast} />}
+      {activeTab===2 && <TabAltoran members={sourceMembers} onToast={onToast} />}
+      {activeTab===3 && <TabExcluded members={sourceMembers} onToast={onToast} />}
     </div>
   );
 }

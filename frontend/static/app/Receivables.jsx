@@ -60,8 +60,12 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
 
     setServerLoading(true);
     fetch(`/api/members?${params.toString()}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => { setServerRows(data); setServerTotal(data.length + (page - 1) * PAGE_SIZE); setServerLoading(false); })
+      .then(r => {
+        if (!r.ok) return Promise.reject(r.status);
+        const total = parseInt(r.headers.get("X-Total-Count") || "", 10);
+        return r.json().then(data => ({ data, total: Number.isFinite(total) ? total : data.length }));
+      })
+      .then(({data,total}) => { setServerRows(data); setServerTotal(total); setServerLoading(false); })
       .catch(() => { setServerLoading(false); });
   }, [query, region, membership, account, amount, status, special, inclZero, inclPrepaid, minAmt, maxAmt, page]);
 
@@ -168,7 +172,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* 요약 스트립 */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-        {[["검색 결과",`${num(rows.length)}명`,"var(--text-primary)"],
+        {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
           ["현재잔액 합계",won(sumOut),"var(--red-500)"],
           ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
           ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
@@ -305,7 +309,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                   style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", fontSize:12 }}>다음</button>
               </div>
             )}
-            <span style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)" }}>{num(rows.length)}명</span>
+            <span style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)" }}>현재 {num(rows.length)}명 / 전체 {num(serverTotal || rows.length)}명</span>
           </div>
         </div>
       </div>

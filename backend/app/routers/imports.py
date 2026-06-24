@@ -115,21 +115,21 @@ def _append_unique_note(existing: str | None, label: str, value: Any, max_len: i
 
 
 def _strip_generated_member_memo(existing: str | None) -> str | None:
-    """과거 업로드 때 자동 생성된 주소/사업자/공문주소 메모는 제거하고,
-    실제 사람이 입력한 비고/미수금 비고만 남긴다.
+    """회원상세 표시용 기본정보(주소/공문주소/주민번호 등)를 메모에 보존한다.
+    기존 버전처럼 주소 메모를 지우면 회원상세에서 주소가 '-'로 표시되므로 삭제하지 않는다.
     """
     current = _clean(existing)
-    if not current:
-        return None
-    keep: list[str] = []
-    for part in re.split(r"\s*/\s*", current):
-        p = part.strip()
-        if not p:
-            continue
-        if re.match(r"^(주소|사업자등록번호|소속업체|공문\s*주소|대리인|구조변경|전화\s*메모)\s*[:：]", p):
-            continue
-        keep.append(p)
-    return " / ".join(keep)[:1800] if keep else None
+    return current[:1800] if current else None
+
+
+def _member_basic_note(row: dict[str, Any]) -> str | None:
+    parts: list[str] = []
+    # DB 모델에 별도 주소 컬럼이 없어도 회원상세/API에서 복원할 수 있게 메모에 구조화 저장한다.
+    for k in ["주소", "공문 주소", "주민등록번호", "전화번호", "핸드폰", "자격증명 발급번호"]:
+        v = _clean(row.get(k))
+        if v:
+            parts.append(f"{k}:{v}")
+    return " / ".join(parts)[:1200] if parts else None
 
 
 def _ledger_note(row: dict[str, Any]) -> str | None:
@@ -137,11 +137,14 @@ def _ledger_note(row: dict[str, Any]) -> str | None:
     실제 비고류 칸만 따로 보존한다.
     """
     parts: list[str] = []
+    basic_note = _member_basic_note(row)
+    if basic_note:
+        parts.append(basic_note)
     for k in ["비고", "비고2", "비고3", "전화 메모"]:
         v = _clean(row.get(k))
         if v:
             parts.append(f"원장 {k}:{v}")
-    return " / ".join(parts)[:1000] if parts else None
+    return " / ".join(parts)[:1800] if parts else None
 
 
 def _is_contact_problem_note(value: Any) -> bool:
