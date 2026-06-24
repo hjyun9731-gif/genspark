@@ -54,16 +54,17 @@ function Upload({ onApply }) {
     form.append("file", file);
     try {
       const res = await fetch("/api/import/preview", { method: "POST", body: form });
-      const json = await res.json();
+      let json;
+      try { json = await res.json(); } catch(_) { json = {}; }
       if (!res.ok) {
-        setError(json.detail || `서버 오류 (${res.status})`);
+        setError(`미리보기 실패 (HTTP ${res.status}): ${json.detail || res.statusText}`);
         setStage("select");
         return;
       }
       setPreviewData(json);
       setStage("preview");
     } catch (e) {
-      setError("서버에 연결할 수 없습니다: " + e.message);
+      setError(`POST /api/import/preview 호출 실패: ${e.message} — 브라우저 콘솔에서 상세 확인`);
       setStage("select");
     }
   };
@@ -87,17 +88,18 @@ function Upload({ onApply }) {
     form.append("file", storedFileRef.current);
     try {
       const res = await fetch("/api/import/commit", { method: "POST", body: form });
-      const json = await res.json();
+      let json;
+      try { json = await res.json(); } catch(_) { json = {}; }
       if (!res.ok) {
-        setError(json.detail || `반영 실패 (${res.status})`);
+        setError(`반영 실패 (HTTP ${res.status}): ${json.detail || res.statusText}`);
         setApplying(false);
         return;
       }
       setApplied(json);
       setStage("done");
-      onApply && onApply();
+      onApply && onApply(json);
     } catch (e) {
-      setError("반영 중 오류: " + e.message);
+      setError(`POST /api/import/commit 호출 실패: ${e.message}`);
     } finally {
       setApplying(false);
     }
