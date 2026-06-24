@@ -11,6 +11,12 @@ from ..models import Closure, MemberHistory
 router = APIRouter(prefix="/api/closures", tags=["closures"])
 
 
+class ClosureStatusUpdate(BaseModel):
+    type: str | None = None
+    collect_status: str | None = None
+    memo: str | None = None
+
+
 class ClosureUpdate(BaseModel):
     type: str | None = None
     process_date: str | None = None
@@ -32,9 +38,16 @@ def _closure_dict(c: Closure) -> dict:
         "mgmtNo": m.mgmt_no if m else "",
         "mgmt_no": m.mgmt_no if m else "",
         "sigun": m.sigun if m else "",
+        "phone": m.phone if m else "",
+        "memberType": m.member_type if m else "",
+        "membership": m.membership if m else "",
+        "birthYear": m.birth_year if m else None,
+        "certIssueDate": m.cert_issue_date.isoformat() if (m and m.cert_issue_date) else "",
+        "assocJoinDate": m.assoc_join_date.isoformat() if (m and m.assoc_join_date) else "",
+        "memo": m.memo if m else "",
         "type": c.type,
-        "processDate": c.process_date.isoformat(),
-        "process_date": c.process_date.isoformat(),
+        "processDate": c.process_date.isoformat() if c.process_date else "",
+        "process_date": c.process_date.isoformat() if c.process_date else "",
         "docNo": c.doc_no,
         "doc_no": c.doc_no,
         "content": c.content,
@@ -82,6 +95,41 @@ def update_closure(closure_id: int, payload: ClosureUpdate, db: Session = Depend
     db.commit()
     db.refresh(c)
     return {"ok": True, "closure": _closure_dict(c)}
+
+
+@router.patch("/{closure_id}/status")
+def update_closure_status(closure_id: int, payload: ClosureStatusUpdate, db: Session = Depends(get_db)):
+    c = db.get(Closure, closure_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="폐업/이탈 기록을 찾을 수 없습니다.")
+    if payload.type is not None:
+        c.type = payload.type
+        if c.member:
+            c.member.status = payload.type
+    history_note = "상태변경"
+    if payload.type:
+        history_note += f" → {payload.type}"
+    if payload.collect_status:
+        history_note += f" / 추심상태: {payload.collect_status}"
+    if payload.memo:
+        history_note += f" / {payload.memo}"
+    db.add(MemberHistory(member_id=c.member_id, content=history_note, actor="system"))
+    db.commit()
+    db.refresh(c)
+    return {"ok": True, "closure": _closure_dict(c)}
+
+
+@router.post("/{closure_id}/cancel")
+def cancel_closure(closure_id: int, db: Session = Depends(get_db)):
+    c = db.get(Closure, closure_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="폐업/이탈 기록을 찾을 수 없습니다.")
+    if c.member:
+        c.member.status = "정상"
+    db.add(MemberHistory(member_id=c.member_id, content=f"{c.type} 처리 취소 — 정상으로 복귀 (이력 보존)", actor="system"))
+    db.delete(c)
+    db.commit()
+    return {"ok": True, "cancelled": True}
 
 
 @router.post("/{closure_id}/restore")

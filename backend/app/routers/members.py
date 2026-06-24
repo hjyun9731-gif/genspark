@@ -119,14 +119,23 @@ def list_members(
     membership: str | None = None,
     status: str | None = Query(None, description="정상/폐업/양도/이관/탈퇴"),
     has_arrears: bool | None = Query(None, description="미수금명단=True"),
+    min_balance: int | None = Query(None, description="현재잔액 최솟값"),
+    max_balance: int | None = Query(None, description="현재잔액 최댓값"),
+    include_zero: bool = Query(True, description="0원 포함"),
+    include_prepaid: bool = Query(True, description="선납(-) 포함"),
+    min_months: int | None = Query(None, description="미수개월 최솟값"),
+    max_months: int | None = Query(None, description="미수개월 최댓값"),
     page: int = 1,
-    size: int = 500,
+    size: int = 1000,
     db: Session = Depends(get_db),
 ):
     stmt = select(Member).options(selectinload(Member.receivable_items), selectinload(Member.payments))
     if q:
         like = f"%{q}%"
-        stmt = stmt.where((Member.name.like(like)) | (Member.vehicle_no.like(like)) | (Member.mgmt_no.like(like)))
+        stmt = stmt.where(
+            (Member.name.like(like)) | (Member.vehicle_no.like(like)) |
+            (Member.mgmt_no.like(like)) | (Member.phone.like(like))
+        )
     if sigun:
         stmt = stmt.where(Member.sigun == sigun)
     if member_type:
@@ -136,10 +145,8 @@ def list_members(
     if status:
         stmt = stmt.where(Member.status == status)
 
-    # 미수금명단 조회는 페이지를 자르기 전에 DB 기준으로 먼저 걸러야 한다.
-    # 그렇지 않으면 첫 페이지/size 범위 안에 미수자가 없을 때 화면이 0명처럼 보일 수 있다.
     if has_arrears is True:
-        stmt = stmt.join(ReceivableItem).where(
+        stmt = stmt.join(ReceivableItem, isouter=False).where(
             ReceivableItem.is_paid == False,  # noqa: E712
             ReceivableItem.amount > 0,
             Member.status == "정상",
@@ -153,8 +160,26 @@ def list_members(
         stmt = stmt.where(Member.id.not_in(arrears_subq))
 
     stmt = stmt.order_by(Member.sigun, Member.name).offset((page - 1) * size).limit(size)
-    members = [_member_dict(m) for m in db.scalars(stmt).unique().all()]
-    return members
+    result = []
+    for m in db.scalars(stmt).unique().all():
+        d = _member_dict(m)
+        bal = d["arrears_amount"]
+        months = d["arrears_months"]
+        # 잔액 필터 (DB에서 정확한 집계 후 Python 레벨에서 추가 필터)
+        if min_balance is not None and bal < min_balance:
+            continue
+        if max_balance is not None and bal > max_balance:
+            continue
+        if not include_zero and bal == 0:
+            continue
+        if not include_prepaid and bal < 0:
+            continue
+        if min_months is not None and months < min_months:
+            continue
+        if max_months is not None and months > max_months:
+            continue
+        result.append(d)
+    return result
 
 
 @router.get("/{member_id}")

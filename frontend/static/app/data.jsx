@@ -3,13 +3,15 @@
 // 오래된 달부터 차감하는 수납 반영, 수납항목/회계구분, 통장입금 매칭, 폐업현황.
 
 const REGIONS = [
-  "춘천시","강릉시","원주시","홍천군","횡성군","영월군","평창군",
-  "정선군","철원군","화천군","양구군","인제군","고성군","양양군",
+  "춘천시","원주시","강릉시","동해시","태백시","속초시","삼척시",
+  "홍천군","횡성군","영월군","평창군","정선군","철원군","화천군",
+  "양구군","인제군","고성군","양양군",
 ];
 const REGION_CODE = {
-  "춘천시":"80","강릉시":"81","원주시":"82","홍천군":"83","횡성군":"84",
-  "영월군":"85","평창군":"86","정선군":"87","철원군":"88","화천군":"89",
-  "양구군":"90","인제군":"91","고성군":"92","양양군":"93",
+  "춘천시":"80","원주시":"82","강릉시":"81","동해시":"83","태백시":"84",
+  "속초시":"85","삼척시":"86","홍천군":"87","횡성군":"88","영월군":"89",
+  "평창군":"90","정선군":"91","철원군":"92","화천군":"93",
+  "양구군":"94","인제군":"95","고성군":"96","양양군":"97",
 };
 const SURNAMES = ["김","이","박","최","정","강","조","윤","장","임","한","오","서","신","권","황","안","송","전","홍","유","고","문","양","손","배","백","허","남","심"];
 const GIVEN = ["영수","정호","상철","민수","대현","병호","성민","재석","권택","석규","태웅","종길","현우","경수","동훈","기영","상우","해철","두식","판석","춘배","만수","길동","복남","정자","순옥","말순","점례","영자","미경","숙자","연자","화숙","근태","갑수","칠성","덕배","상규","병철","용대"];
@@ -179,14 +181,22 @@ const MEMBERS = Array.from({length: 52}, (_,i)=>buildMember(i));
 // ===== 계산 헬퍼 (모든 화면 공유) =====
 function openItems(m){ return (m.arrears||[]).filter(a=>!a.paid && a.amount>0).sort((a,b)=>a.ym.localeCompare(b.ym)); }
 function balanceItems(m){ return (m.arrears||[]).filter(a=>!a.paid && a.amount!==0).sort((a,b)=>a.ym.localeCompare(b.ym)); }
-function outstanding(m){ return balanceItems(m).reduce((s,a)=>s+a.amount,0); }     // 현재잔액 (음수=선납)
+// API에서 오는 totalArrears/arrears_amount를 우선 사용하고, 없으면 arrears 배열에서 계산
+function outstanding(m){
+  if (m.totalArrears !== undefined && m.totalArrears !== null) return m.totalArrears;
+  if (m.arrears_amount !== undefined && m.arrears_amount !== null) return m.arrears_amount;
+  return balanceItems(m).reduce((s,a)=>s+a.amount,0);
+}
+// API에서 오는 arrearsMonths를 우선 사용 (DB에서 미납 건수를 정확히 셈)
 function arrearsMonths(m){
+  if (m.arrearsMonths !== undefined && m.arrearsMonths !== null) return m.arrearsMonths;
+  if (m.arrears_months !== undefined && m.arrears_months !== null) return m.arrears_months;
   const amt = outstanding(m);
   if (amt <= 0) return 0;
-  const f = m.monthlyCharge||0;
+  const f = m.monthlyCharge||m.monthly_charge||0;
   return f>0 ? Math.max(1, Math.ceil(amt/f)) : (openItems(m).length||1);
 }
-function paidTotal(m){ return (m.payments||[]).filter(p=>isArrearsIncome(p.chargeItem)).reduce((s,p)=>s+p.amount,0); }
+function paidTotal(m){ return (m.payments||[]).filter(p=>isArrearsIncome(p.chargeItem||p.charge_item)).reduce((s,p)=>s+p.amount,0); }
 function ledgerArrears(m){ return outstanding(m) + paidTotal(m); }                 // 원장미수
 function basisYm(m){ const o=openItems(m); return o.length ? o[o.length-1].ym : (m.billingStartYm||"-"); }
 function billingBasisDate(m){ const raw = m.chargeItem==="협회비" ? m.assocJoinDate : m.certIssueDate; return raw || "-"; }

@@ -319,127 +319,143 @@ function inferRegion(row, REGIONS) {
   return row.region || "미분류";
 }
 
-function TabAltoran({ onToast }) {
+function TabAltoran({ members, onToast }) {
   const D = window.PMData;
-  const { REGIONS } = D;
-  const [pasteText, setPasteText] = React.useState("");
-  const [rows, setRows] = React.useState([]);
+  const { REGIONS, won, outstanding } = D;
+  const today = new Date();
+  const [issueMonth, setIssueMonth] = React.useState(String(today.getMonth()+1));
+  const [issueYear, setIssueYear] = React.useState(String(today.getFullYear()));
+  const [issueDate, setIssueDate] = React.useState(
+    `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,"0")}.${String(today.getDate()).padStart(2,"0")}.`
+  );
+  const [excludeNoPhone, setExcludeNoPhone] = React.useState(true);
   const [excludeJiro, setExcludeJiro] = React.useState(true);
-  const [deduped, setDeduped] = React.useState(false);
-  const fileInputRef = React.useRef(null);
 
-  const processRows = (rawRows) => {
-    let result = rawRows;
-    if (excludeJiro) result = result.filter(r => !r.note?.includes("지로"));
-    if (deduped) {
-      const seen = new Set();
-      result = result.filter(r => {
-        const key = r.phone || r.vehicleNo || r.name;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    }
-    return result;
-  };
+  // 미수금 있는 정상 회원만
+  const eligible = React.useMemo(() => {
+    return (members||[]).filter(m => {
+      if (m.status !== "정상") return false;
+      const amt = m.arrears_amount ?? m.totalArrears ?? 0;
+      if (amt <= 0) return false;
+      if (excludeNoPhone && !m.phone) return false;
+      if (excludeJiro && (m.memo||"").includes("지로")) return false;
+      return true;
+    });
+  }, [members, excludeNoPhone, excludeJiro]);
 
-  const parsed = React.useMemo(() => {
-    const raw = parseAltoranText(pasteText);
-    return processRows(raw).map(r => ({ ...r, inferredRegion: inferRegion(r, REGIONS) }));
-  }, [pasteText, excludeJiro, deduped]);
+  const noPhone = React.useMemo(() => (members||[]).filter(m => m.status==="정상" && (m.arrears_amount??m.totalArrears??0)>0 && !m.phone).length, [members]);
 
   const groups = React.useMemo(() => {
-    const order = REGIONS.filter(r => parsed.some(p=>p.inferredRegion===r));
-    const other = parsed.filter(p=>!REGIONS.includes(p.inferredRegion));
-    const result = order.map(r=>({region:r,rows:parsed.filter(p=>p.inferredRegion===r)})).filter(g=>g.rows.length);
-    if (other.length) result.push({region:"미분류",rows:other});
-    return result;
-  }, [parsed]);
-
-  const noPhone = parsed.filter(r=>!r.phone).length;
-
-  const handleFileUpload = async (file) => {
-    if (!file) return;
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (!["xlsx","xls","xlsm"].includes(ext) && ext !== "txt" && ext !== "csv") {
-      onToast("지원하지 않는 파일입니다. xlsx·xls·xlsm·txt·csv 파일을 사용하세요."); return;
-    }
-    if (["txt","csv"].includes(ext)) {
-      const text = await file.text();
-      setPasteText(text);
-      return;
-    }
-    // xlsx: 서버에 업로드해서 텍스트 변환 요청 (또는 안내)
-    onToast("엑셀 파일은 내용을 복사해서 붙여넣기 해주세요. txt/csv 파일도 지원합니다.");
-  };
-
-  const exportExcel = () => {
-    if (!parsed.length) { onToast("추출된 데이터가 없습니다."); return; }
-    const head = ["지역","성명","차량번호","핸드폰번호","전화번호2","주소","비고","전화없음"];
-    const lines = [head.join(",")];
-    groups.forEach(g => g.rows.forEach(r => {
-      lines.push([g.region,r.name,r.vehicleNo,r.phone||"",r.phone2||"",r.address||"",r.note||"",r.phone?"":"전화없음"].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","));
-    }));
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"}));
-    a.download = "알토란추출.csv"; a.click();
-    onToast(`알토란 추출 완료 · ${parsed.length}명 다운로드`);
-  };
-
-  const copyAll = () => {
-    const lines = [];
-    groups.forEach(g => {
-      lines.push(`[${g.region}]`);
-      g.rows.forEach(r => {
-        lines.push([r.name, r.vehicleNo, r.phone||"전화없음", r.address].filter(Boolean).join("\t"));
-      });
+    const regionOrder = REGIONS;
+    const byRegion = {};
+    eligible.forEach(m => {
+      const r = m.sigun || "미분류";
+      if (!byRegion[r]) byRegion[r] = [];
+      byRegion[r].push(m);
     });
-    navigator.clipboard.writeText(lines.join("\n")).then(()=>onToast("클립보드에 복사되었습니다."));
+    const result = regionOrder.filter(r=>byRegion[r]?.length).map(r=>({region:r,rows:byRegion[r]}));
+    const others = Object.keys(byRegion).filter(r=>!regionOrder.includes(r));
+    others.forEach(r => result.push({region:r,rows:byRegion[r]}));
+    return result;
+  }, [eligible, REGIONS]);
+
+  const exportXlsx = () => {
+    if (!eligible.length) { onToast("추출된 데이터가 없습니다."); return; }
+    if (typeof XLSX === "undefined") { onToast("엑셀 라이브러리가 로드되지 않았습니다. 페이지를 새로고침 해주세요."); return; }
+
+    const monthLabel = `${issueMonth}월분`;
+    const chargeMap = { "협회비": 0, "관리비": 0, "70세": 0 };
+
+    // Sheet1
+    const sheet1Headers = ["코드","상호","대표자명","기타사원","핸드폰","거래처구분","품목코드","지로발행명목","규격","발행연월일","발행금액"];
+    const sheet1Data = [sheet1Headers];
+    eligible.forEach((m, idx) => {
+      const amt = m.arrears_amount ?? m.totalArrears ?? 0;
+      const chargeItem = m.chargeItem || m.charge_item || "협회비";
+      if (chargeMap.hasOwnProperty(chargeItem)) chargeMap[chargeItem] += amt;
+      sheet1Data.push([
+        idx + 1,
+        m.vehicleNo || m.vehicle_no || "",
+        m.name || "",
+        chargeItem,
+        m.phone || "",
+        "S",
+        "00005",
+        chargeItem,
+        monthLabel,
+        issueDate,
+        amt,
+      ]);
+    });
+
+    const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+    // 발행금액 열(K) 숫자 서식
+    const range = XLSX.utils.decode_range(ws1["!ref"]);
+    for (let r = 1; r <= range.e.r; r++) {
+      const cell = ws1[XLSX.utils.encode_cell({r, c: 10})];
+      if (cell) cell.z = "#,##0";
+    }
+
+    // 요약 시트
+    const totalAmt = eligible.reduce((s,m) => s + (m.arrears_amount ?? m.totalArrears ?? 0), 0);
+    const summaryData = [
+      ["항목", "건수/금액"],
+      ["입력건수", eligible.length],
+      ["협회비 합계", chargeMap["협회비"]],
+      ["관리비 합계", chargeMap["관리비"]],
+      ["70세 합계", chargeMap["70세"]],
+      ["발행금액합계", totalAmt],
+      ["핸드폰없음 제외", noPhone],
+      ["발행월", monthLabel],
+      ["발행연월일", issueDate],
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, "Sheet1");
+    XLSX.utils.book_append_sheet(wb, ws2, "요약");
+
+    const fileName = `(문자)${issueMonth}월_핸드폰번호채움.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    onToast(`알토란 추출 완료 · ${eligible.length}명 · ${fileName}`);
   };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <Card>
-        <div style={{ font:"var(--fw-demibold) 15px/1.3 var(--font-sans)", color:"var(--text-primary)", marginBottom:14 }}>알토란 데이터 입력</div>
-        <div style={{ display:"flex", gap:12, marginBottom:14 }}>
-          <div style={{ flex:1 }}>
-            <textarea
-              value={pasteText}
-              onChange={e=>setPasteText(e.target.value)}
-              placeholder={"알토란 데이터를 여기에 붙여넣기 하세요.\n(탭으로 구분된 텍스트 형식)\n\n예:\n춘천시\t홍길동\t강원80바7741\t010-1234-5678\t춘천시 조양동\n..."}
-              style={{ width:"100%", height:160, padding:"12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1.6 monospace", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }}
-            />
+        <div style={{ font:"var(--fw-demibold) 15px/1.3 var(--font-sans)", color:"var(--text-primary)", marginBottom:14 }}>알토란 엑셀 추출 설정</div>
+        <div style={{ display:"flex", gap:24, flexWrap:"wrap", marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <label style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>발행월</label>
+            <select value={issueYear} onChange={e=>setIssueYear(e.target.value)} style={{ height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)" }}>
+              {[today.getFullYear()-1, today.getFullYear(), today.getFullYear()+1].map(y=><option key={y} value={y}>{y}년</option>)}
+            </select>
+            <select value={issueMonth} onChange={e=>setIssueMonth(e.target.value)} style={{ height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)" }}>
+              {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{m}월</option>)}
+            </select>
           </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.xlsm,.txt,.csv" style={{display:"none"}} onChange={e=>{handleFileUpload(e.target.files[0]);e.target.value="";}} />
-            <button onClick={()=>fileInputRef.current?.click()} style={{ height:42, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>
-              파일 업로드
-            </button>
-            <button onClick={()=>setPasteText("")} style={{ height:42, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", cursor:"pointer" }}>
-              초기화
-            </button>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <label style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>발행연월일</label>
+            <input type="text" value={issueDate} onChange={e=>setIssueDate(e.target.value)} placeholder="2026.06.22." style={{ height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)", width:120 }} />
           </div>
         </div>
-        <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-          <OptToggle label="지로희망자 제외" checked={excludeJiro} onChange={setExcludeJiro} />
-          <OptToggle label="전화번호 중복 제거" checked={deduped} onChange={setDeduped} />
+        <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+          <OptToggle label="핸드폰 없는 회원 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
+          <OptToggle label="지로희망자 제외 (메모 기준)" checked={excludeJiro} onChange={setExcludeJiro} />
         </div>
       </Card>
 
-      {parsed.length > 0 && (
+      {eligible.length > 0 && (
         <>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
             <div style={{ display:"flex", alignItems:"center", gap:24 }}>
-              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>추출 인원</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{parsed.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>추출 인원</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{eligible.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
               <div style={{ width:1, height:34, background:"var(--border-default)" }} />
-              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역 수</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div></div>
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>발행금액합계</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--red-500)" }}>{won(eligible.reduce((s,m)=>s+(m.arrears_amount??m.totalArrears??0),0))}</div></div>
               <div style={{ width:1, height:34, background:"var(--border-default)" }} />
-              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>전화없음</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color: noPhone>0?"var(--amber-500)":"var(--text-tertiary)" }}>{noPhone}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>핸드폰없음 (제외됨)</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:noPhone>0?"var(--amber-500)":"var(--text-tertiary)" }}>{noPhone}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
             </div>
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={copyAll} style={{ height:36, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", cursor:"pointer" }}>복사</button>
-              <window.PMUI.DownloadBtn onClick={exportExcel} label="엑셀 다운로드" />
-            </div>
+            <window.PMUI.DownloadBtn onClick={exportXlsx} label="알토란 엑셀 다운로드" />
           </div>
 
           {groups.map(g => (
@@ -451,19 +467,19 @@ function TabAltoran({ onToast }) {
               </div>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr>
-                  {["성명","차량번호","핸드폰번호","전화번호2","주소","비고"].map(h=>(
-                    <th key={h} style={{ textAlign:"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+                  {["순번","성명","차량번호","부과항목","핸드폰","발행금액"].map((h,i)=>(
+                    <th key={h} style={{ textAlign:i===5?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
                   {g.rows.map((r,i)=>(
-                    <tr key={i} style={{ borderBottom:i<g.rows.length-1?"1px solid var(--border-subtle)":"none", background:!r.phone?"var(--amber-25,#FFFBEB)":"" }}>
+                    <tr key={r.id||i} style={{ borderBottom:i<g.rows.length-1?"1px solid var(--border-subtle)":"none", background:!r.phone?"var(--amber-25,#FFFBEB)":"" }}>
+                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{i+1}</td>
                       <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{r.name||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.vehicleNo||"—"}</td>
+                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.vehicleNo||r.vehicle_no||"—"}</td>
+                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.chargeItem||r.charge_item||"—"}</td>
                       <td style={{ padding:"10px 20px", font:"var(--body-sm)", whiteSpace:"nowrap", color:r.phone?"var(--text-primary)":"var(--amber-500)" }}>{r.phone||"전화없음"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.phone2||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.address||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{r.note||"—"}</td>
+                      <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(r.arrears_amount??r.totalArrears??0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -473,8 +489,8 @@ function TabAltoran({ onToast }) {
         </>
       )}
 
-      {!parsed.length && pasteText.trim() && (
-        <Card><div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>데이터를 파싱할 수 없습니다. 탭 구분 형식의 텍스트를 붙여넣기 해주세요.</div></Card>
+      {eligible.length === 0 && (
+        <Card><div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>미수금이 있는 정상 회원이 없거나 필터 조건에 해당하는 회원이 없습니다.</div></Card>
       )}
     </div>
   );
@@ -546,7 +562,7 @@ function Regional({ members, onToast }) {
 
       {activeTab===0 && <TabRegional members={members} onToast={onToast} />}
       {activeTab===1 && <TabSms members={members} onToast={onToast} />}
-      {activeTab===2 && <TabAltoran onToast={onToast} />}
+      {activeTab===2 && <TabAltoran members={members} onToast={onToast} />}
       {activeTab===3 && <TabExcluded members={members} onToast={onToast} />}
     </div>
   );

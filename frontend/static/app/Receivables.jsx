@@ -8,14 +8,17 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
 
   const [query, setQuery] = React.useState("");
   const [region, setRegion] = React.useState("");
-  const [membership, setMembership] = React.useState("");   // 협회가입/협회미가입
-  const [account, setAccount] = React.useState("");         // 협회비/관리비
-  const [amount, setAmount] = React.useState("전체");        // 전체/미수있음/완납/선납/30만원이상
+  const [membership, setMembership] = React.useState("");
+  const [account, setAccount] = React.useState("");
+  const [amount, setAmount] = React.useState("전체");
   const [status, setStatus] = React.useState("정상");
-  const [special, setSpecial] = React.useState("");         // 장기/결번/자격/70세
+  const [special, setSpecial] = React.useState("");
   const [sort, setSort] = React.useState({ key:"outstanding", dir:"desc" });
+  const [minAmt, setMinAmt] = React.useState("");
+  const [maxAmt, setMaxAmt] = React.useState("");
+  const [inclZero, setInclZero] = React.useState(true);
+  const [inclPrepaid, setInclPrepaid] = React.useState(true);
 
-  // 대시보드 드릴다운 반영
   React.useEffect(()=>{
     if(!drill) return;
     setAmount(drill.amount || "전체");
@@ -23,11 +26,14 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
     setSpecial(drill.special || "");
     setStatus(drill.status || "정상");
     setMembership(""); setAccount(""); setQuery("");
+    setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true);
   }, [drill]);
 
   const rows = React.useMemo(()=>{
     const q = query.trim();
     const nq = D.normVehicle(q);
+    const minA = minAmt !== "" ? parseInt(minAmt.replace(/,/g,""),10) : null;
+    const maxA = maxAmt !== "" ? parseInt(maxAmt.replace(/,/g,""),10) : null;
     let list = members.filter(m=>{
       if (status !== "전체" && m.status !== status) return false;
       const out = D.outstanding(m);
@@ -35,16 +41,21 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
       if (amount === "완납" && out !== 0) return false;
       if (amount === "선납" && !(out<0)) return false;
       if (amount === "30만원이상" && !(out>=300000)) return false;
+      if (!inclZero && out === 0) return false;
+      if (!inclPrepaid && out < 0) return false;
+      if (minA !== null && !isNaN(minA) && out < minA) return false;
+      if (maxA !== null && !isNaN(maxA) && out > maxA) return false;
       if (region && m.sigun !== region) return false;
-      if (membership && m.membership !== membership) return false;
-      if (account && m.chargeItem !== account) return false;
+      if (membership && (m.membership||m.membership) !== membership) return false;
+      if (account && (m.chargeItem||m.charge_item) !== account) return false;
       if (special === "장기" && D.arrearsMonths(m) < 12) return false;
-      if (special === "결번" && !m.disconnected) return false;
-      if (special === "자격" && !m.certMissing) return false;
+      if (special === "결번" && !(m.disconnected||m.is_disconnected)) return false;
+      if (special === "자격" && !(m.certMissing||m.cert_missing)) return false;
       if (special === "70세" && !m.isSenior) return false;
       if (q){
-        const nv = D.normVehicle(m.vehicleNo);
-        const text = [m.name, m.vehicleNo, m.id, m.mgmtNo, m.phone, m.sigun, m.regionRaw, m.address, m.note].join(" ").toLowerCase();
+        const vno = m.vehicleNo||m.vehicle_no||"";
+        const nv = D.normVehicle(vno);
+        const text = [m.name, vno, m.id, m.mgmtNo||m.mgmt_no, m.phone, m.sigun, m.regionRaw||m.region_raw].join(" ").toLowerCase();
         const hit = text.includes(q.toLowerCase()) || (nq && (nv.includes(nq) || nv.slice(-4).includes(nq)));
         if(!hit) return false;
       }
@@ -83,7 +94,7 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
     return true;
   }).length;
 
-  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); }
+  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true); }
 
   function exportCSV(){
     const head = ["지역","차량번호","이름","계정","부과기준일","기준월","미수개월수","원장미수","수납합계","현재잔액","핸드폰번호","주소","처리상태"];
@@ -145,7 +156,19 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
         <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
         <Chip active={special==="결번"} onClick={()=>setSpecial(special==="결번"?"":"결번")}>결번/반송</Chip>
         <Chip active={special==="자격"} onClick={()=>setSpecial(special==="자격"?"":"자격")}>자격증명 미발급</Chip>
+        <Chip active={!inclZero} onClick={()=>setInclZero(!inclZero)}>0원 제외</Chip>
+        <Chip active={!inclPrepaid} onClick={()=>setInclPrepaid(!inclPrepaid)}>선납 제외</Chip>
         <button type="button" onClick={resetFilters} style={{ marginLeft:"auto", height:36, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>초기화</button>
+      </div>
+      {/* 금액 직접 입력 필터 */}
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+        <span style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)" }}>현재잔액</span>
+        <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>setMinAmt(e.target.value)}
+          style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+        <span style={{ color:"var(--text-tertiary)", fontSize:12 }}>~</span>
+        <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>setMaxAmt(e.target.value)}
+          style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+        {(minAmt||maxAmt) && <button type="button" onClick={()=>{setMinAmt("");setMaxAmt("");}} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>금액 초기화</button>}
       </div>
 
       {/* 검색 + 정렬 + 다운로드 */}
@@ -184,7 +207,7 @@ function Receivables({ members, drill, density, onPay, onSelect, onClose, onToas
                     onMouseEnter={e=>e.currentTarget.style.background="var(--grey-25)"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                     <td style={{ padding:pad, font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.sigun}</td>
-                    <td style={{ padding:pad, font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{m.vehicleNo}</td>
+                    <td style={{ padding:pad, font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{m.vehicleNo||m.vehicle_no}</td>
                     <td style={{ padding:pad, whiteSpace:"nowrap" }}>
                       <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
                         <b style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</b>
