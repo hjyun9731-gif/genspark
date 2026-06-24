@@ -2,7 +2,7 @@
 
 from datetime import date
 
-import math
+import math`r`nimport re
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -354,4 +354,5 @@ def register_closure(member_id: str, payload: ClosureCreate, db: Session = Depen
     db.add(MemberHistory(member_id=member.id, content=f"{payload.type} 처리 / 미수잔액 {unpaid:,}원", actor="system"))
     db.commit()
     return {"ok": True, "closure_id": closure.id, "unpaid_balance": unpaid, "notify_later": closure.notify_later}
+
 
