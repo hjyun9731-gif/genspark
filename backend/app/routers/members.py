@@ -155,6 +155,8 @@ def list_members(
     include_prepaid: bool = Query(True, description="선납(-) 포함"),
     min_months: int | None = Query(None, description="미수개월 최솟값"),
     max_months: int | None = Query(None, description="미수개월 최댓값"),
+    sort: str | None = Query("outstanding", description="정렬키"),
+    dir: str = Query("desc", description="asc/desc"),
     page: int = 1,
     size: int = 1000,
     db: Session = Depends(get_db),
@@ -211,6 +213,23 @@ def list_members(
         if max_months is not None and months > max_months:
             continue
         filtered.append(d)
+    # 전체 조건 기준 정렬 후 페이지네이션한다. 프론트의 50명 현재페이지 기준 정렬 오류 방지.
+    reverse = (dir or "desc") != "asc"
+    def _sort_value(x: dict):
+        key = sort or "outstanding"
+        if key == "months":
+            return int(x.get("arrears_months") or 0)
+        if key == "ledger":
+            return int(x.get("arrears_amount") or 0)
+        if key == "region":
+            return x.get("sigun") or ""
+        if key == "name":
+            return x.get("name") or ""
+        if key == "vehicle":
+            return x.get("vehicle_no") or ""
+        return int(x.get("arrears_amount") or 0)
+    filtered.sort(key=_sort_value, reverse=reverse)
+
     total = len(filtered)
     if response is not None:
         response.headers["X-Total-Count"] = str(total)

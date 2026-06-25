@@ -43,6 +43,8 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     const params = new URLSearchParams();
     params.set("page", page);
     params.set("size", PAGE_SIZE);
+    params.set("sort", sort.key);
+    params.set("dir", sort.dir);
     if (query.trim()) params.set("q", query.trim());
     if (region) params.set("sigun", region);
     if (membership) params.set("membership", membership);
@@ -77,7 +79,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       })
       .then(({data,meta}) => { const items = Array.isArray(data) ? data : (data.items || []); const m = data.meta || meta || {}; setServerRows(items); setServerMeta(m); setServerTotal(m.totalCount || items.length); setServerLoading(false); })
       .catch(() => { setServerLoading(false); });
-  }, [query, region, membership, account, amount, status, special, inclZero, inclPrepaid, minAmt, maxAmt, page]);
+  }, [query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt, page]);
 
   // 서버 결과 사용 (없으면 membersProp에서 로컬 필터)
   const rows = React.useMemo(()=>{
@@ -132,7 +134,8 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     return list;
   }, [serverRows, membersProp, query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt]);
 
-  const sumOut = serverMeta?.totalBalance ?? rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
+  const pageSumOut = rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
+  const sumOut = serverMeta?.totalBalance ?? pageSumOut;
   const over300 = serverMeta?.over300kCount ?? rows.filter(m=>D.outstanding(m)>=300000).length;
   const longCnt = serverMeta?.over12MonthsCount ?? rows.filter(m=>D.arrearsMonths(m)>=12).length;
   const cellPad = density==="compact" ? "9px 14px" : density==="comfy" ? "16px 14px" : "12px 14px";
@@ -158,7 +161,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     }).length;
   };
 
-  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false); setPage(1); }
+  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("미수있음"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false); setPage(1); }
 
   function exportCSV(){
     const head = ["지역","차량번호","이름","계정","부과기준일","기준월","미수개월수","원장미수","수납합계","현재잔액","핸드폰번호","주소","처리상태"];
@@ -190,8 +193,9 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* 요약 스트립 */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:12 }}>
         {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
+          ["현재 페이지 합계",won(pageSumOut),"var(--text-primary)"],
           ["전체 조건 합계",won(sumOut),"var(--red-500)"],
           ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
           ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
@@ -205,32 +209,32 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       {/* 금액 탭 */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {PAY_TABS.map(([key,label])=>(
-          <Chip key={key} active={amount===key} count={countByAmount(key)} onClick={()=>setAmount(key)}>{label}</Chip>
+          <Chip key={key} active={amount===key} onClick={()=>{ setAmount(key); setPage(1); }}>{label}</Chip>
         ))}
       </div>
 
       {/* 필터줄 */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <FilterDropdown label="지역" value={region} onChange={setRegion} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
-        <FilterDropdown label="가입" value={membership} onChange={setMembership} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
-        <FilterDropdown label="계정" value={account} onChange={setAccount} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
-        <FilterDropdown label="상태" value={status} onChange={setStatus} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
+        <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
+        <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
+        <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
+        <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
         <DivLine/>
-        <Chip active={special==="장기"} onClick={()=>setSpecial(special==="장기"?"":"장기")}>12개월 이상</Chip>
+        <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월 이상</Chip>
         <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
         <Chip active={special==="결번"} onClick={()=>setSpecial(special==="결번"?"":"결번")}>결번/반송</Chip>
         <Chip active={special==="자격"} onClick={()=>setSpecial(special==="자격"?"":"자격")}>자격증명 미발급</Chip>
-        <Chip active={!inclZero} onClick={()=>setInclZero(!inclZero)}>0원 제외</Chip>
-        <Chip active={!inclPrepaid} onClick={()=>setInclPrepaid(!inclPrepaid)}>선납 제외</Chip>
+        <Chip active={!inclZero} onClick={()=>{setInclZero(!inclZero);setPage(1);}}>0원 제외</Chip>
+        <Chip active={!inclPrepaid} onClick={()=>{setInclPrepaid(!inclPrepaid);setPage(1);}}>선납 제외</Chip>
         <button type="button" onClick={resetFilters} style={{ marginLeft:"auto", height:36, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>초기화</button>
       </div>
       {/* 금액 직접 입력 필터 */}
       <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
         <span style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)" }}>현재잔액</span>
-        <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>setMinAmt(e.target.value)}
+        <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>{setMinAmt(e.target.value);setPage(1);}}
           style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
         <span style={{ color:"var(--text-tertiary)", fontSize:12 }}>~</span>
-        <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>setMaxAmt(e.target.value)}
+        <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>{setMaxAmt(e.target.value);setPage(1);}}
           style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
         {(minAmt||maxAmt) && <button type="button" onClick={()=>{setMinAmt("");setMaxAmt("");}} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>금액 초기화</button>}
       </div>
@@ -279,9 +283,9 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                         <MemberStatusChip status={m.status} />
                       </span>
                     </td>
-                    <td style={{ padding:pad }}><ChargeTag item={m.chargeItem} /></td>
+                    <td style={{ padding:cellPad }}><ChargeTag item={m.chargeItem} /></td>
                     <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.basisYm(m)}</td>
-                    <td style={{ padding:pad }}><MonthsChip months={D.arrearsMonths(m)} /></td>
+                    <td style={{ padding:cellPad }}><MonthsChip months={D.arrearsMonths(m)} /></td>
                     <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(D.ledgerArrears(m))}</td>
                     <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--green-500)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.paidTotal(m)?won(D.paidTotal(m)):"—"}</td>
                     <td style={{ padding:cellPad, textAlign:"right", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
@@ -289,7 +293,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                       color: out>0?"var(--red-500)": out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
                     <td style={{ padding:cellPad, font:"var(--body-sm)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
                       color: m.disconnected?"var(--red-500)":"var(--text-secondary)" }}>{m.phone||"—"}</td>
-                    <td style={{ padding:pad }}>
+                    <td style={{ padding:cellPad }}>
                       {out<0 ? <StatusPill status="선납" /> : out===0 ? <StatusPill status="완납" /> :
                         m.status==="정상" ? <StatusPill status="미납" /> : <MemberStatusChip status={m.status} />}
                     </td>
@@ -315,17 +319,17 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderTop:"1px solid var(--border-subtle)", background:"var(--grey-25)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 0원·선납 회원도 함께 표시</span>
+            <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 기본값은 미납/0원 제외/선납 제외</span>
             {serverLoading && <span style={{ font:"var(--body-xs)", color:"var(--brand)" }}>조회 중...</span>}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            {serverRows !== null && rows.length === PAGE_SIZE && (
+            {serverRows !== null && serverTotal > PAGE_SIZE && (
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
                   style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page===1?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page===1?0.4:1 }}>이전</button>
                 <span style={{ font:"var(--body-xs)", color:"var(--text-secondary)" }}>페이지 {page}</span>
-                <button onClick={()=>setPage(p=>p+1)}
-                  style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", fontSize:12 }}>다음</button>
+                <button onClick={()=>setPage(p=>p+1)} disabled={page*PAGE_SIZE >= serverTotal}
+                  style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page*PAGE_SIZE>=serverTotal?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page*PAGE_SIZE>=serverTotal?0.4:1 }}>다음</button>
               </div>
             )}
             <span style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)" }}>현재 {num(rows.length)}명 / 전체 {num(serverTotal || rows.length)}명</span>
