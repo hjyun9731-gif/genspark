@@ -147,6 +147,34 @@ def _ledger_note(row: dict[str, Any]) -> str | None:
     return " / ".join(parts)[:1800] if parts else None
 
 
+
+
+def _member_info_note(row: dict[str, Any]) -> str | None:
+    """전체면허자현황의 기본정보를 Member.memo에 구조화 보존한다."""
+    parts: list[str] = []
+    pairs = [
+        ("주소", row.get("주소")),
+        ("공문주소", row.get("공문 주소") or row.get("공문주소")),
+        ("주민등록번호", row.get("주민등록번호")),
+        ("자격증명 발급번호", row.get("자격증명 발급번호")),
+        ("전화번호", row.get("전화번호")),
+        ("운전면허증번호", row.get("운전면허증번호")),
+        ("사업자등록번호", row.get("사업자등록번호")),
+        ("소속업체", row.get("소속업체")),
+        ("대리인", row.get("대리인")),
+        ("구조변경", row.get("구조변경")),
+    ]
+    for label, value in pairs:
+        v = _clean(value)
+        if v:
+            parts.append(f"{label}:{v}")
+    for k in ["비고", "비고2", "비고3", "전화 메모"]:
+        v = _clean(row.get(k))
+        if v:
+            parts.append(f"원장 {k}:{v}")
+    return " / ".join(parts)[:1800] if parts else None
+
+
 def _is_contact_problem_note(value: Any) -> bool:
     t = _clean(value).replace(" ", "").lower()
     if not t:
@@ -697,7 +725,7 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             byear = _birth_year(row.get("주민등록번호", ""))
             age = (date.today().year - byear) if byear else None
             amount = monthly_charge(membership, age=age, birth_year=byear)
-            memo = _ledger_note(row)
+            memo = _member_info_note(row)
             if existing:
                 m = existing
                 raw_mgmt = _clean(row.get("관리번호"))
@@ -723,10 +751,8 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 m.status = m.status or "정상"
                 m.cert_missing = cert_date is None
                 cleaned_memo = _strip_generated_member_memo(m.memo)
-                if memo:
-                    m.memo = _append_unique_note(cleaned_memo, "원장 비고", memo)
-                else:
-                    m.memo = cleaned_memo
+                parts = [x for x in [cleaned_memo, memo] if x]
+                m.memo = " / ".join(parts)[:1800] if parts else None
                 updated += 1
             else:
                 while _next_member_id_from_no(next_no) in used_ids:

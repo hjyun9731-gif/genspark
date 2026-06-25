@@ -1,3 +1,5 @@
+import calendar
+import re
 """신규·예정자 라우터 — 등록/수정/삭제/전체자명단 전환."""
 
 from datetime import date
@@ -65,6 +67,57 @@ class PromotePayload(BaseModel):
     doc_no: str | None = None
     docNo: str | None = None
     note: str | None = None
+
+
+
+
+def _next_month_same_day(d: date | None) -> date:
+    d = d or date.today()
+    y, m = d.year, d.month + 1
+    if m == 13:
+        y += 1
+        m = 1
+    day = min(d.day, calendar.monthrange(y, m)[1])
+    return date(y, m, day)
+
+
+def _memo_field(raw: str | None, labels: list[str]) -> str:
+    text = raw or ""
+    for part in re.split(r"\s*/\s*", text):
+        if ":" in part:
+            k, v = part.split(":", 1)
+        elif "：" in part:
+            k, v = part.split("：", 1)
+        else:
+            continue
+        if re.sub(r"\s+", "", k) in [re.sub(r"\s+", "", x) for x in labels]:
+            return v.strip()
+    return ""
+
+
+def _pending_note(payload, existing: str | None = None, cert_date: date | None = None) -> str | None:
+    parts = [p.strip() for p in re.split(r"\s*/\s*", existing or "") if p.strip()]
+    remove = {"주소", "공문주소", "주민등록번호", "자격증명발급번호", "접수공문번호", "부과시작일"}
+    kept = []
+    for part in parts:
+        key = part.split(":", 1)[0].split("：", 1)[0]
+        if re.sub(r"\s+", "", key) not in remove:
+            kept.append(part)
+    vals = {
+        "주소": getattr(payload, "address", None),
+        "공문주소": getattr(payload, "public_address", None) or getattr(payload, "publicAddress", None),
+        "주민등록번호": getattr(payload, "resident_no", None) or getattr(payload, "residentNo", None),
+        "자격증명발급번호": getattr(payload, "cert_issue_no", None) or getattr(payload, "certIssueNo", None),
+        "접수공문번호": getattr(payload, "doc_no", None) or getattr(payload, "docNo", None),
+        "부과시작일": _next_month_same_day(cert_date).isoformat() if cert_date else None,
+    }
+    for k, v in vals.items():
+        if v:
+            kept.append(f"{k}:{v}")
+    note = getattr(payload, "note", None)
+    if note:
+        kept.append(str(note))
+    return " / ".join(kept)[:1800] if kept else None
 
 
 def _next_member_id(db: Session) -> str:
@@ -159,6 +212,17 @@ def _pending_dict(p: Pending) -> dict:
         "expectedCharge": p.expected_charge,
         "billingStartDate": _billing_start_date(p.cert_issue_date).isoformat() if p.cert_issue_date else None,
         "note": p.note,
+        "address": _memo_field(p.note, ["주소"]),
+        "publicAddress": _memo_field(p.note, ["공문주소", "공문 주소"]),
+        "public_address": _memo_field(p.note, ["공문주소", "공문 주소"]),
+        "residentNo": _memo_field(p.note, ["주민등록번호", "주민번호"]),
+        "resident_no": _memo_field(p.note, ["주민등록번호", "주민번호"]),
+        "certIssueNo": _memo_field(p.note, ["자격증명발급번호", "자격증명 발급번호"]),
+        "cert_issue_no": _memo_field(p.note, ["자격증명발급번호", "자격증명 발급번호"]),
+        "docNo": _memo_field(p.note, ["접수공문번호", "공문번호", "접수번호"]),
+        "doc_no": _memo_field(p.note, ["접수공문번호", "공문번호", "접수번호"]),
+        "billingStartDate": _memo_field(p.note, ["부과시작일"]),
+        "billing_start_date": _memo_field(p.note, ["부과시작일"]),
         "promoted_member_id": p.promoted_member_id,
         "promotedMemberId": p.promoted_member_id,
     }
@@ -213,7 +277,7 @@ def update_pending(pending_id: int, payload: PendingPayload, db: Session = Depen
         ("reg_type", payload.reg_type or payload.regType),
         ("cert_issue_date", payload.cert_issue_date or payload.certIssueDate),
         ("mgmt_no", payload.mgmt_no or payload.mgmtNo),
-        ("note", payload.note),
+        ("note", _pending_note(payload, p.note, payload.cert_issue_date or payload.certIssueDate or p.cert_issue_date)),
         ("step", payload.step),
     ]:
         if val is not None:
@@ -271,7 +335,7 @@ def promote_pending(pending_id: int, payload: PromotePayload | None = None, db: 
         charge_item=charge_item,
         monthly_charge=monthly_charge,
         status="정상",
-        memo=payload.note or p.note,
+        memo=_pending_note(payload, payload.note or p.note, cert_date),
     )
     db.add(member)
     db.flush()
@@ -279,6 +343,6 @@ def promote_pending(pending_id: int, payload: PromotePayload | None = None, db: 
     p.step_index = 9
     p.promoted_member_id = member.id
     p.mgmt_no = mgmt_no
-    db.add(MemberHistory(member_id=member.id, content=f"예정자에서 전체자명단 전환 / 부과시작 {billing_start_ym}", actor="system"))
+    db.add(MemberHistory(member_id=member.id, content=f"예정자에서 전체자명단 전환 / 부과시작월 {billing_start_ym} / 부과시작일 {_next_month_same_day(cert_date).isoformat()}", actor="system"))
     db.commit()
     return {"ok": True, "member_id": member.id, "memberId": member.id, "pending": _pending_dict(p)}

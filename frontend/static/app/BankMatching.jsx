@@ -20,6 +20,8 @@ const INCOME_ACTIONS = [
   { value:null,           label:"회비반영", green:true },
   { value:"협회가입비",     label:"가수금" },
   { value:"자격증명발급비", label:"잡수입" },
+  { value:"카드결제",      label:"카드결제" },
+  { value:"현금결제",      label:"현금결제" },
   { value:"기타",          label:"기타" },
 ];
 function IncomeActions({ onPick }){
@@ -65,7 +67,7 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
   }
 
   const Th = ({label,align="left"})=>(
-    <th style={{ textAlign:align, padding:"11px 16px", whiteSpace:"nowrap", font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-default)", position:"sticky", top:0, zIndex:1 }}>{label}</th>
+    <th style={{ textAlign:align, padding:"9px 12px", whiteSpace:"nowrap", font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-default)", position:"sticky", top:0, zIndex:1 }}>{label}</th>
   );
 
   return (

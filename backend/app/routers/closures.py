@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Closure, MemberHistory, Member
+from ..models import Closure, Member, MemberHistory, ReceivableItem, Member
 
 router = APIRouter(prefix="/api/closures", tags=["closures"])
 
@@ -64,6 +64,17 @@ def _closure_dict(c: Closure) -> dict:
         "mgmt_no": m.mgmt_no if m else "",
         "sigun": m.sigun if m else "",
         "phone": m.phone if m else "",
+        "address": address,
+        "publicAddress": public_address,
+        "public_address": public_address,
+        "unpaidItem": unpaid_items,
+        "unpaid_item": unpaid_items,
+        "unpaidMonths": unpaid_months,
+        "unpaid_months": unpaid_months,
+        "collectStatus": collect_status,
+        "collect_status": collect_status,
+        "lastNoticeDate": last_notice,
+        "last_notice_date": last_notice,
         "address": _memo_field(m.memo if m else "", ["주소", "주 소"]),
         "publicAddress": _memo_field(m.memo if m else "", ["공문 주소", "공문주소"]),
         "memberType": m.member_type if m else "",
