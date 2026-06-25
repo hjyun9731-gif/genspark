@@ -45,11 +45,17 @@ def _memo_field(memo: str | None, labels: list[str]) -> str | None:
         return None
     for label in labels:
         # 메모에 저장된 "주소:... / 공문 주소:..." 형태를 다시 화면 필드로 복원한다.
-        m = re.search(rf"(?:^|\s*/\s*){re.escape(label)}\s*[:：]\s*([^/]+)", raw)
-        if m:
-            v = m.group(1).strip()
-            if v:
-                return v[:300]
+        # 과거 업로드에서 "원장 비고:주소:..."처럼 앞에 다른 라벨이 붙은 경우도 같이 복원한다.
+        patterns = [
+            rf"(?:^|\s*/\s*){re.escape(label)}\s*[:：]\s*([^/]+)",
+            rf"{re.escape(label)}\s*[:：]\s*([^/]+)",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, raw)
+            if m:
+                v = m.group(1).strip()
+                if v:
+                    return v[:300]
     return None
 
 

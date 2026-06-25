@@ -147,6 +147,24 @@ def _ledger_note(row: dict[str, Any]) -> str | None:
     return " / ".join(parts)[:1800] if parts else None
 
 
+
+
+def _merge_member_notes(existing: str | None, generated: str | None, max_len: int = 1800) -> str | None:
+    """주소/공문주소/주민번호 등 구조화 메모를 원장 비고로 감싸지 않고 그대로 보존한다."""
+    current = _clean(existing)
+    note = _clean(generated)
+    if not note:
+        return current[:max_len] if current else None
+    parts = [x.strip() for x in (current + " / " + note if current else note).split(" / ") if x.strip()]
+    merged: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        if part in seen:
+            continue
+        seen.add(part)
+        merged.append(part)
+    return " / ".join(merged)[:max_len] if merged else None
+
 def _is_contact_problem_note(value: Any) -> bool:
     t = _clean(value).replace(" ", "").lower()
     if not t:
@@ -723,10 +741,7 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 m.status = m.status or "정상"
                 m.cert_missing = cert_date is None
                 cleaned_memo = _strip_generated_member_memo(m.memo)
-                if memo:
-                    m.memo = _append_unique_note(cleaned_memo, "원장 비고", memo)
-                else:
-                    m.memo = cleaned_memo
+                m.memo = _merge_member_notes(cleaned_memo, memo)
                 updated += 1
             else:
                 while _next_member_id_from_no(next_no) in used_ids:

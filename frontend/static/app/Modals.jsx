@@ -349,8 +349,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                   <InfoRow label="회원상태" value={member.status} />
                   <SectionLabel style={{ marginTop:20 }}>연락처 · 주소</SectionLabel>
                   <InfoRow label="핸드폰번호" value={member.phone} />
-                  <InfoRow label="주소" value={member.address} />
-                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address} />
+                  <InfoRow label="주소" value={member.address||member.addr||member.homeAddress||member.home_address} />
+                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address||member.officialAddress||member.official_address} />
                   <InfoRow label="주민등록번호" value={member.residentNo||member.resident_no} />
                   <InfoRow label="자격증명 발급번호" value={member.certIssueNo||member.cert_issue_no} />
                   <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
@@ -453,7 +453,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
 
         {/* 하단 버튼 */}
         <div style={{ flex:"none", padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
-          <button onClick={()=>onClosure(member)} style={{ height:38, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>폐업·이탈</button>
+          <button onClick={()=>onClosure(member)} style={{ height:38, minWidth:104, flex:"0 0 auto", padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
           <Button variant="primary" size="medium" fullWidth leadingIcon="dollar" onClick={()=>onPay(member)}>수납 반영</Button>
         </div>
       </div>
