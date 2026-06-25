@@ -214,6 +214,12 @@ def list_members(
     total = len(filtered)
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
+        response.headers["X-Total-Balance"] = str(sum(max(int(x.get("arrears_amount") or 0), 0) for x in filtered))
+        response.headers["X-Unpaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) > 0))
+        response.headers["X-Zero-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) == 0))
+        response.headers["X-Prepaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) < 0))
+        response.headers["X-Over-300k"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) >= 300000))
+        response.headers["X-Over-12Months"] = str(sum(1 for x in filtered if int(x.get("arrears_months") or 0) >= 12))
         response.headers["X-Page"] = str(page)
         response.headers["X-Page-Size"] = str(size)
     start = max(page - 1, 0) * size
@@ -346,7 +352,7 @@ def register_closure(member_id: str, payload: ClosureCreate, db: Session = Depen
         type=payload.type,
         process_date=payload.process_date,
         doc_no=payload.doc_no,
-        content=payload.content or "미수금명단에서 이탈 처리",
+        content=payload.content or "",
         unpaid_balance=unpaid,
         notify_later=unpaid > 0 or payload.notify_later,
     )

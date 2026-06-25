@@ -1,14 +1,38 @@
 """폐업현황 라우터 — 처리 이력/수정/복귀/삭제."""
 
+import math
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Closure, MemberHistory
+from ..models import Closure, MemberHistory, Member
 
 router = APIRouter(prefix="/api/closures", tags=["closures"])
+
+
+def _memo_field(memo: str | None, labels: list[str]) -> str | None:
+    raw = str(memo or "")
+    for label in labels:
+        m = re.search(rf"(?:^|\s*/\s*){re.escape(label)}\s*[:：]\s*([^/]+)", raw)
+        if m and m.group(1).strip():
+            return m.group(1).strip()[:300]
+    return None
+
+
+def _closure_unpaid_info(m: Member | None) -> tuple[int, str, int]:
+    if not m:
+        return 0, "-", 0
+    items = [x for x in (m.receivable_items or []) if (not x.is_paid) and int(x.amount or 0) > 0]
+    total = int(sum(int(x.amount or 0) for x in items))
+    item_names = sorted({(x.charge_item or m.charge_item or "미분류") for x in items})
+    monthly = int(m.monthly_charge or 0)
+    amount_months = math.ceil(total / monthly) if monthly > 0 and total > 0 else 0
+    return total, "/".join(item_names) if item_names else (m.charge_item or "-"), max(len(items), amount_months)
+
 
 
 class ClosureStatusUpdate(BaseModel):
@@ -28,6 +52,7 @@ class ClosureUpdate(BaseModel):
 
 def _closure_dict(c: Closure) -> dict:
     m = c.member
+    calc_unpaid, unpaid_item, unpaid_months = _closure_unpaid_info(m)
     return {
         "id": c.id,
         "member_id": c.member_id,
@@ -39,6 +64,8 @@ def _closure_dict(c: Closure) -> dict:
         "mgmt_no": m.mgmt_no if m else "",
         "sigun": m.sigun if m else "",
         "phone": m.phone if m else "",
+        "address": _memo_field(m.memo if m else "", ["주소", "주 소"]),
+        "publicAddress": _memo_field(m.memo if m else "", ["공문 주소", "공문주소"]),
         "memberType": m.member_type if m else "",
         "membership": m.membership if m else "",
         "birthYear": m.birth_year if m else None,
@@ -51,8 +78,14 @@ def _closure_dict(c: Closure) -> dict:
         "docNo": c.doc_no,
         "doc_no": c.doc_no,
         "content": c.content,
-        "unpaidBalance": c.unpaid_balance,
-        "unpaid_balance": c.unpaid_balance,
+        "unpaidBalance": int(c.unpaid_balance or calc_unpaid or 0),
+        "unpaid_balance": int(c.unpaid_balance or calc_unpaid or 0),
+        "unpaidItem": unpaid_item,
+        "unpaid_item": unpaid_item,
+        "unpaidMonths": unpaid_months,
+        "unpaid_months": unpaid_months,
+        "collectStatus": getattr(c, "collect_status", None) or "안내전",
+        "collect_status": getattr(c, "collect_status", None) or "안내전",
         "notifyLater": c.notify_later,
         "notify_later": c.notify_later,
         "memberStatus": m.status if m else "",
@@ -63,7 +96,7 @@ def _closure_dict(c: Closure) -> dict:
 def list_closures(page: int = 1, size: int = 5000, db: Session = Depends(get_db)):
     stmt = (
         select(Closure)
-        .options(selectinload(Closure.member))
+        .options(selectinload(Closure.member).selectinload(Member.receivable_items))
         .order_by(Closure.process_date.desc(), Closure.id.desc())
         .offset((page - 1) * size)
         .limit(size)

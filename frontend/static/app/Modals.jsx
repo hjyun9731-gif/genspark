@@ -252,8 +252,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
   );
 
   return (
-    <Backdrop onClose={onClose} align="right">
-      <div onClick={e=>e.stopPropagation()} style={{ width:580, background:"var(--white)", height:"100%", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmSlide .22s ease" }}>
+    <Backdrop onClose={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:"min(980px, calc(100vw - 48px))", maxHeight:"92vh", background:"var(--white)", borderRadius:"var(--radius-xl)", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmPop .18s ease", overflow:"hidden" }}>
         {/* 헤더 */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px", borderBottom:"1px solid var(--border-subtle)", background:"var(--white)", zIndex:2, flex:"none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -351,6 +351,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                   <InfoRow label="핸드폰번호" value={member.phone} />
                   <InfoRow label="주소" value={member.address} />
                   <InfoRow label="공문주소" value={member.publicAddress||member.public_address} />
+                  <InfoRow label="주민등록번호" value={member.residentNo||member.resident_no} />
+                  <InfoRow label="자격증명 발급번호" value={member.certIssueNo||member.cert_issue_no} />
                   <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
                   <InfoRow label="자격증명 발급일" value={member.certIssueDate||member.cert_issue_date||"미발급"} />
                   <InfoRow label="협회 가입일" value={member.assocJoinDate||member.assoc_join_date} />
@@ -451,7 +453,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
 
         {/* 하단 버튼 */}
         <div style={{ flex:"none", padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
-          <button onClick={()=>onClosure(member)} style={{ height:38, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>폐업/이탈</button>
+          <button onClick={()=>onClosure(member)} style={{ height:38, padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>폐업·이탈</button>
           <Button variant="primary" size="medium" fullWidth leadingIcon="dollar" onClick={()=>onPay(member)}>수납 반영</Button>
         </div>
       </div>
@@ -496,7 +498,7 @@ function HistoryTab({ memberId }) {
   );
 }
 
-// ===== 폐업/이탈 등록 모달 =====
+// ===== 폐업·이탈 등록 모달 =====
 function ClosureModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
   const { won } = D;
@@ -538,13 +540,13 @@ function ClosureModal({ member, onClose, onConfirm }) {
             </div>
             <div style={{ flex:1 }}>
               <label style={fieldLabel}>공문/접수번호</label>
-              <input value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder="예: 접수2026-114" style={inputBase} />
+              <input value={docNo} onChange={e=>setDocNo(e.target.value)} placeholder={type==="폐업"?"예: 폐-26":type==="양도"?"예: 양-18":type==="이관"?"예: 이-8":"예: 탈-3"} style={inputBase} />
             </div>
           </div>
 
           <div>
-            <label style={fieldLabel}>처리내용 / 사유</label>
-            <textarea value={content} onChange={e=>setContent(e.target.value)} rows={2} placeholder="사유를 입력하면 처리이력에 기록됩니다"
+            <label style={fieldLabel}>메모 (선택)</label>
+            <textarea value={content} onChange={e=>setContent(e.target.value)} rows={2} placeholder="필수 아님. 필요할 때만 입력"
               style={{ width:"100%", padding:"10px 12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }} />
           </div>
 

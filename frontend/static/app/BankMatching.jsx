@@ -116,25 +116,25 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
                 const diff = group ? group.diff : best ? (d.amount - arrears) : null;
                 return (
                   <tr key={d.id} style={{ borderBottom:"1px solid var(--border-subtle)", opacity:done?0.6:1 }}>
-                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{d.depositDate}</td>
-                    <td style={{ padding:"12px 16px", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{d.depositorName}</td>
-                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.memo}>{d.memo || d.description}</td>
-                    <td style={{ padding:"12px 16px", textAlign:"right", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(d.amount)}</td>
-                    <td style={{ padding:"12px 16px" }}>
+                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{d.depositDate}</td>
+                    <td style={{ padding:"9px 12px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{d.depositorName}</td>
+                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.memo}>{d.memo || d.description}</td>
+                    <td style={{ padding:"9px 12px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(d.amount)}</td>
+                    <td style={{ padding:"9px 12px" }}>
                       <BankStatusBadge status={d.status} />
                       {group && <div style={{ display:"inline-flex", marginLeft:6, padding:"3px 8px", borderRadius:"var(--radius-pill)", background:"#EFEEFD", color:"var(--violet-500)", font:"var(--fw-demibold) 11px/1 var(--font-sans)" }}>묶음</div>}
                       {!group && d.candidates && d.candidates.length>1 && <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)", marginTop:3 }}>후보 {d.candidates.length}명</div>}
                     </td>
-                    <td style={{ padding:"12px 16px", whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
                       {group ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{group.title}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>묶음 {group.resolvedCount}/{group.targetCount}명 · 대납</div></span>
                         : best ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{best.name}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{best.mgmtNo}</div></span>
-                        : <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>수동매칭 필요</span>}
+                        : <span style={{ font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>수동매칭 필요</span>}
                     </td>
-                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{group ? "대납자 묶음" : best?.vehicleNo || "—"}</td>
-                    <td style={{ padding:"12px 16px", textAlign:"right", whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{group ? "대납자 묶음" : best?.vehicleNo || "—"}</td>
+                    <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
                       {(group||best) ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{won(arrears)}</b><div style={{ font:"10px/1.4 var(--font-sans)", color: diff===0?"var(--green-500)":"var(--text-tertiary)" }}>{diffText(diff)}</div></span> : "—"}
                     </td>
-                    <td style={{ padding:"12px 16px", textAlign:"right", whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
                       {!done ? (
                         <div style={{ display:"inline-flex", gap:6 }}>
                           {group
@@ -178,7 +178,7 @@ function ManualMatchModal({ deposit, members, onClose, onMatch, onGroupMatch }){
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div>
             <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>후보 확인 / 수동매칭</div>
-            <div style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", marginTop:4 }}>{deposit.depositorName} · {won(deposit.amount)} · {deposit.depositDate}</div>
+            <div style={{ font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)", marginTop:4 }}>{deposit.depositorName} · {won(deposit.amount)} · {deposit.depositDate}</div>
           </div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
         </div>
@@ -193,7 +193,7 @@ function ManualMatchModal({ deposit, members, onClose, onMatch, onGroupMatch }){
                 {groupCands.map((g)=>(
                   <div key={g.code} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", border:"1px solid #E3E1FB", background:"#F7F6FE", borderRadius:"var(--radius-md)" }}>
                     <div style={{ flex:1 }}>
-                      <b style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{g.title}</b>
+                      <b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{g.title}</b>
                       <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:3 }}>{g.reason} · {(g.members||[]).map(m=>m.name).join(", ")}</div>
                     </div>
                     <div style={{ textAlign:"right" }}><div style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{won(g.expectedAmount)}</div><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{g.resolvedCount}/{g.targetCount}명</div></div>
@@ -210,7 +210,7 @@ function ManualMatchModal({ deposit, members, onClose, onMatch, onGroupMatch }){
                 {deposit.candidates.map((c,i)=>(
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)" }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <b style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{c.name}</b>
+                      <b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{c.name}</b>
                       <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:3 }}>{c.vehicleNo} · {c.mgmtNo} · 미수 {won(c.totalArrears)}</div>
                     </div>
                     <IncomeActions onPick={(item)=>onMatch(deposit, members.find(m=>m.id===c.id) || c, item)} />
@@ -229,13 +229,13 @@ function ManualMatchModal({ deposit, members, onClose, onMatch, onGroupMatch }){
                   {rows.map(m=>(
                     <tr key={m.id} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
                       <td style={{ padding:"9px 14px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</td>
-                      <td style={{ padding:"9px 14px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{m.sigun}</td>
-                      <td style={{ padding:"9px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo}</td>
+                      <td style={{ padding:"9px 14px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)" }}>{m.sigun}</td>
+                      <td style={{ padding:"9px 14px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo}</td>
                       <td style={{ padding:"9px 14px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{won(D.outstanding(m))}</td>
                       <td style={{ padding:"9px 14px", textAlign:"right" }}><IncomeActions onPick={(item)=>onMatch(deposit, m, item)} /></td>
                     </tr>
                   ))}
-                  {rows.length===0 && <tr><td colSpan={5} style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>검색 결과가 없습니다.</td></tr>}
+                  {rows.length===0 && <tr><td colSpan={5} style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)", font:"13px/1.4 var(--font-sans)" }}>검색 결과가 없습니다.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -332,7 +332,7 @@ function PasteModal({ onClose, onSave }){
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div>
             <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>통장거래 붙여넣기</div>
-            <div style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", marginTop:4 }}>은행/엑셀 거래내역을 복사해 붙여넣으면 통장매칭 대기 거래로 저장됩니다.</div>
+            <div style={{ font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)", marginTop:4 }}>은행/엑셀 거래내역을 복사해 붙여넣으면 통장매칭 대기 거래로 저장됩니다.</div>
           </div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
         </div>
@@ -348,12 +348,12 @@ function PasteModal({ onClose, onSave }){
               <tbody>
                 {parsed.slice(0,30).map((r,i)=>(
                   <tr key={i} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
-                    <td style={{ padding:"8px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.depositDate}</td>
-                    <td style={{ padding:"8px 14px", font:"var(--body-sm)", color:"var(--text-primary)" }}><b>{r.depositorName}</b> <span style={{ color:"var(--text-tertiary)" }}>{r.memo}</span></td>
+                    <td style={{ padding:"8px 14px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.depositDate}</td>
+                    <td style={{ padding:"8px 14px", font:"13px/1.4 var(--font-sans)", color:"var(--text-primary)" }}><b>{r.depositorName}</b> <span style={{ color:"var(--text-tertiary)" }}>{r.memo}</span></td>
                     <td style={{ padding:"8px 14px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{won(r.amount)}</td>
                   </tr>
                 ))}
-                {parsed.length===0 && <tr><td colSpan={3} style={{ padding:"24px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>붙여넣은 거래내역이 아직 없습니다.</td></tr>}
+                {parsed.length===0 && <tr><td colSpan={3} style={{ padding:"24px", textAlign:"center", color:"var(--text-tertiary)", font:"13px/1.4 var(--font-sans)" }}>붙여넣은 거래내역이 아직 없습니다.</td></tr>}
               </tbody>
             </table>
           </div>

@@ -10,14 +10,14 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [region, setRegion] = React.useState("");
   const [membership, setMembership] = React.useState("");
   const [account, setAccount] = React.useState("");
-  const [amount, setAmount] = React.useState("전체");
+  const [amount, setAmount] = React.useState("미수있음");
   const [status, setStatus] = React.useState("정상");
   const [special, setSpecial] = React.useState("");
   const [sort, setSort] = React.useState({ key:"outstanding", dir:"desc" });
   const [minAmt, setMinAmt] = React.useState("");
   const [maxAmt, setMaxAmt] = React.useState("");
-  const [inclZero, setInclZero] = React.useState(true);
-  const [inclPrepaid, setInclPrepaid] = React.useState(true);
+  const [inclZero, setInclZero] = React.useState(false);
+  const [inclPrepaid, setInclPrepaid] = React.useState(false);
 
   // 서버사이드 페이지네이션
   const [page, setPage] = React.useState(1);
@@ -25,6 +25,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [serverRows, setServerRows] = React.useState(null); // null = 아직 미사용
   const [serverLoading, setServerLoading] = React.useState(false);
   const [serverTotal, setServerTotal] = React.useState(0);
+  const [serverMeta, setServerMeta] = React.useState(null);
 
   React.useEffect(()=>{
     if(!drill) return;
@@ -33,7 +34,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     setSpecial(drill.special || "");
     setStatus(drill.status || "정상");
     setMembership(""); setAccount(""); setQuery("");
-    setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true);
+    setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false);
     setPage(1);
   }, [drill]);
 
@@ -62,10 +63,19 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     fetch(`/api/members?${params.toString()}`)
       .then(r => {
         if (!r.ok) return Promise.reject(r.status);
-        const total = parseInt(r.headers.get("X-Total-Count") || "", 10);
-        return r.json().then(data => ({ data, total: Number.isFinite(total) ? total : data.length }));
+        const numHeader = (name) => { const n = parseInt(r.headers.get(name) || "", 10); return Number.isFinite(n) ? n : null; };
+        const meta = {
+          totalCount: numHeader("X-Total-Count"),
+          totalBalance: numHeader("X-Total-Balance"),
+          unpaidCount: numHeader("X-Unpaid-Count"),
+          zeroCount: numHeader("X-Zero-Count"),
+          prepaidCount: numHeader("X-Prepaid-Count"),
+          over300kCount: numHeader("X-Over-300k"),
+          over12MonthsCount: numHeader("X-Over-12Months"),
+        };
+        return r.json().then(data => ({ data, meta }));
       })
-      .then(({data,total}) => { setServerRows(data); setServerTotal(total); setServerLoading(false); })
+      .then(({data,meta}) => { const items = Array.isArray(data) ? data : (data.items || []); const m = data.meta || meta || {}; setServerRows(items); setServerMeta(m); setServerTotal(m.totalCount || items.length); setServerLoading(false); })
       .catch(() => { setServerLoading(false); });
   }, [query, region, membership, account, amount, status, special, inclZero, inclPrepaid, minAmt, maxAmt, page]);
 
@@ -122,24 +132,33 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     return list;
   }, [serverRows, membersProp, query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt]);
 
-  const sumOut = rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
-  const over300 = rows.filter(m=>D.outstanding(m)>=300000).length;
-  const longCnt = rows.filter(m=>D.arrearsMonths(m)>=12).length;
+  const sumOut = serverMeta?.totalBalance ?? rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
+  const over300 = serverMeta?.over300kCount ?? rows.filter(m=>D.outstanding(m)>=300000).length;
+  const longCnt = serverMeta?.over12MonthsCount ?? rows.filter(m=>D.arrearsMonths(m)>=12).length;
   const cellPad = density==="compact" ? "9px 14px" : density==="comfy" ? "16px 14px" : "12px 14px";
 
   const PAY_TABS = [["전체","전체"],["미수있음","미납"],["완납","완납/0원"],["선납","선납/초과"],["30만원이상","30만원↑"]];
-  const countByAmount = (key)=> (membersProp||[]).filter(m=>{
-    if (status!=="전체" && m.status!=="정상") return false;
-    const out=D.outstanding(m);
-    if(key==="전체") return true;
-    if(key==="미수있음") return out>0;
-    if(key==="완납") return out===0;
-    if(key==="선납") return out<0;
-    if(key==="30만원이상") return out>=300000;
-    return true;
-  }).length;
+  const countByAmount = (key)=> {
+    if (serverMeta) {
+      if(key==="전체") return serverMeta.totalCount ?? rows.length;
+      if(key==="미수있음") return serverMeta.unpaidCount ?? rows.filter(m=>D.outstanding(m)>0).length;
+      if(key==="완납") return serverMeta.zeroCount ?? rows.filter(m=>D.outstanding(m)===0).length;
+      if(key==="선납") return serverMeta.prepaidCount ?? rows.filter(m=>D.outstanding(m)<0).length;
+      if(key==="30만원이상") return serverMeta.over300kCount ?? rows.filter(m=>D.outstanding(m)>=300000).length;
+    }
+    return (membersProp||[]).filter(m=>{
+      if (status!=="전체" && m.status!=="정상") return false;
+      const out=D.outstanding(m);
+      if(key==="전체") return true;
+      if(key==="미수있음") return out>0;
+      if(key==="완납") return out===0;
+      if(key==="선납") return out<0;
+      if(key==="30만원이상") return out>=300000;
+      return true;
+    }).length;
+  };
 
-  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true); setPage(1); }
+  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false); setPage(1); }
 
   function exportCSV(){
     const head = ["지역","차량번호","이름","계정","부과기준일","기준월","미수개월수","원장미수","수납합계","현재잔액","핸드폰번호","주소","처리상태"];
@@ -173,7 +192,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       {/* 요약 스트립 */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
         {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
-          ["현재잔액 합계",won(sumOut),"var(--red-500)"],
+          ["전체 조건 합계",won(sumOut),"var(--red-500)"],
           ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
           ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
           <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 18px", boxShadow:"var(--shadow-xs)" }}>
@@ -224,7 +243,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
           <SortSelect sort={sort} onChange={setSort} />
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>미수 합계 <b style={{ color:"var(--red-500)" }}>{won(sumOut)}</b></span>
+          <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>전체 조건 미수 합계 <b style={{ color:"var(--red-500)" }}>{won(sumOut)}</b></span>
           <window.PMUI.DownloadBtn onClick={exportCSV} />
         </div>
       </div>

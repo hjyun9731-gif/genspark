@@ -8,7 +8,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..models import Closure, Deposit, Member, Payment, Pending, ReceivableItem
@@ -35,95 +35,127 @@ def _cutoff_ym(months: int = 12) -> str:
 
 @router.get("/summary")
 def summary(db: Session = Depends(get_db)):
-    total_members = db.scalar(select(func.count()).select_from(Member)) or 0
-    active_members = db.scalar(
-        select(func.count()).select_from(Member).where(Member.status == "정상")
-    ) or 0
-    closure_count = db.scalar(select(func.count()).select_from(Closure)) or 0
+    """MISU_REALUSE_SUMMARY_V2
+    대시보드 집계는 목록 50건이 아니라 DB 전체 정상 회원 기준으로 계산한다.
+    current_balance = 미납이고 amount != 0인 항목 합계
+    arrears_amount = 미납이고 amount > 0인 항목 합계
+    arrears_months = max(양수 미수항목 개수, 금액/월부과금 추정 개월)
+    """
+    today = date.today()
+    ym = today.strftime("%Y-%m")
+    members = db.scalars(
+        select(Member).options(selectinload(Member.receivable_items), selectinload(Member.payments))
+    ).unique().all()
 
-    base = select(ReceivableItem).join(Member, ReceivableItem.member_id == Member.id).where(*_arrears_filters()).subquery()
+    total_members = len(members)
+    active = [m for m in members if (m.status or "정상") == "정상"]
+    active_members = len(active)
 
-    total_arrears_amount = db.scalar(
-        select(func.coalesce(func.sum(base.c.amount), 0))
-    ) or 0
-    arrears_members = db.scalar(
-        select(func.count(func.distinct(base.c.member_id)))
-    ) or 0
+    arrears_members = 0
+    total_arrears_amount = 0
+    high_amount = 0
+    long_overdue = 0
+    prepaid = 0
+    seniors = 0
+    by_account: dict[str, int] = {}
+    bucket_map = {
+        "1개월": {"count": 0, "amount": 0},
+        "2-3개월": {"count": 0, "amount": 0},
+        "4-6개월": {"count": 0, "amount": 0},
+        "7-11개월": {"count": 0, "amount": 0},
+        "12개월 이상": {"count": 0, "amount": 0},
+    }
 
-    ym = date.today().strftime("%Y-%m")
+    def put_bucket(months: int, amount: int):
+        if months <= 1:
+            key = "1개월"
+        elif months <= 3:
+            key = "2-3개월"
+        elif months <= 6:
+            key = "4-6개월"
+        elif months <= 11:
+            key = "7-11개월"
+        else:
+            key = "12개월 이상"
+        bucket_map[key]["count"] += 1
+        bucket_map[key]["amount"] += int(amount or 0)
+
+    for m in active:
+        balance_items = [x for x in (m.receivable_items or []) if (not x.is_paid) and int(x.amount or 0) != 0]
+        positive_items = [x for x in balance_items if int(x.amount or 0) > 0]
+        current_balance = int(sum(int(x.amount or 0) for x in balance_items))
+        positive_balance = int(sum(int(x.amount or 0) for x in positive_items))
+        monthly = int(m.monthly_charge or 0)
+        amount_months = ((positive_balance + monthly - 1) // monthly) if monthly > 0 and positive_balance > 0 else 0
+        arrears_months = max(len(positive_items), amount_months)
+
+        if m.birth_year and today.year - int(m.birth_year) >= 70:
+            seniors += 1
+        if current_balance < 0:
+            prepaid += 1
+        if positive_balance > 0:
+            arrears_members += 1
+            total_arrears_amount += positive_balance
+            if positive_balance >= 300000:
+                high_amount += 1
+            if arrears_months >= 12:
+                long_overdue += 1
+            put_bucket(arrears_months, positive_balance)
+            for it in positive_items:
+                k = it.charge_item or m.charge_item or "미분류"
+                by_account[k] = by_account.get(k, 0) + int(it.amount or 0)
+
+    this_month_charge = int(sum(int(m.monthly_charge or 0) for m in active))
     month_payment = db.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
             func.to_char(Payment.paid_date, "YYYY-MM") == ym
         )
     ) or 0
+    collection_rate = round((int(month_payment or 0) / this_month_charge) * 100, 1) if this_month_charge else None
 
-    high_amount = db.scalar(
-        select(func.count(func.distinct(ReceivableItem.member_id)))
-        .join(Member, ReceivableItem.member_id == Member.id)
-        .where(
-            ReceivableItem.is_paid == False,  # noqa: E712
-            ReceivableItem.amount >= 300000,
-            Member.status == "정상",
-        )
-    ) or 0
-
-    # 장기미납: 현재잔액 기준월(ym)이 12개월 이상 오래된 미수자.
-    # ym이 YYYY-MM 문자열이므로 같은 포맷끼리는 문자열 비교가 안전하다.
-    cutoff = _cutoff_ym(12)
-    long_overdue = db.scalar(
-        select(func.count(func.distinct(ReceivableItem.member_id)))
-        .join(Member, ReceivableItem.member_id == Member.id)
-        .where(
-            ReceivableItem.is_paid == False,  # noqa: E712
-            ReceivableItem.amount > 0,
-            ReceivableItem.ym <= cutoff,
-            Member.status == "정상",
-        )
-    ) or 0
-
-    disconnected = db.scalar(
-        select(func.count()).select_from(Member).where(
-            Member.status == "정상", Member.is_disconnected == True  # noqa: E712
-        )
-    ) or 0
-    cert_missing = db.scalar(
-        select(func.count()).select_from(Member).where(
-            Member.status == "정상", Member.cert_missing == True  # noqa: E712
-        )
-    ) or 0
-    bank_pending = db.scalar(
-        select(func.count()).select_from(Deposit).where(
-            Deposit.status.notin_(["매칭완료", "제외"])
-        )
-    ) or 0
+    closure_count = db.scalar(select(func.count()).select_from(Closure)) or 0
+    disconnected = db.scalar(select(func.count()).select_from(Member).where(Member.status == "정상", Member.is_disconnected == True)) or 0  # noqa: E712
+    cert_missing = db.scalar(select(func.count()).select_from(Member).where(Member.status == "정상", Member.cert_missing == True)) or 0  # noqa: E712
+    bank_pending = db.scalar(select(func.count()).select_from(Deposit).where(Deposit.status.notin_(["매칭완료", "제외"]))) or 0
     pending_count = db.scalar(select(func.count()).select_from(Pending)) or 0
+    buckets = [{"key": k, "count": v["count"], "amount": v["amount"]} for k, v in bucket_map.items()]
 
     return {
-        # snake_case: API 원본
         "total_members": int(total_members),
         "active_members": int(active_members),
         "arrears_members": int(arrears_members),
         "total_arrears_amount": int(total_arrears_amount),
-        "month_payment": int(month_payment),
+        "month_payment": int(month_payment or 0),
+        "this_month_charge": int(this_month_charge),
+        "collection_rate": collection_rate,
         "closure_count": int(closure_count),
         "high_amount": int(high_amount),
         "long_overdue": int(long_overdue),
+        "prepaid": int(prepaid),
+        "seniors": int(seniors),
         "disconnected": int(disconnected),
         "cert_missing": int(cert_missing),
         "bank_pending": int(bank_pending),
         "pending_count": int(pending_count),
-        # camelCase: 프론트 호환
+        "by_account": by_account,
+        "buckets": buckets,
         "totalMembers": int(total_members),
         "activeMembers": int(active_members),
         "arrearsCount": int(arrears_members),
         "totalArrears": int(total_arrears_amount),
-        "thisMonthPayments": int(month_payment),
+        "thisMonthPayments": int(month_payment or 0),
+        "thisMonthCharge": int(this_month_charge),
+        "collectionRate": collection_rate,
         "closures": int(closure_count),
         "highAmount": int(high_amount),
         "longOverdue": int(long_overdue),
+        "prepaidCount": int(prepaid),
+        "seniorCount": int(seniors),
         "bankPending": int(bank_pending),
         "pending": int(pending_count),
         "certMissing": int(cert_missing),
+        "byAccount": by_account,
+        "monthBuckets": buckets,
     }
 
 

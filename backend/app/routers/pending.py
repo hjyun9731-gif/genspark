@@ -19,6 +19,15 @@ class PendingPayload(BaseModel):
     vehicle_no: str | None = None
     vehicleNo: str | None = None
     phone: str | None = None
+    address: str | None = None
+    public_address: str | None = None
+    publicAddress: str | None = None
+    resident_no: str | None = None
+    residentNo: str | None = None
+    cert_issue_no: str | None = None
+    certIssueNo: str | None = None
+    doc_no: str | None = None
+    docNo: str | None = None
     sigun: str | None = None
     member_type: str | None = None
     memberType: str | None = None
@@ -46,6 +55,15 @@ class PromotePayload(BaseModel):
     billing_start_ym: str | None = None
     billingStartYm: str | None = None
     phone: str | None = None
+    address: str | None = None
+    public_address: str | None = None
+    publicAddress: str | None = None
+    resident_no: str | None = None
+    residentNo: str | None = None
+    cert_issue_no: str | None = None
+    certIssueNo: str | None = None
+    doc_no: str | None = None
+    docNo: str | None = None
     note: str | None = None
 
 
@@ -74,7 +92,18 @@ def _next_mgmt_no(db: Session) -> str:
     return f"{prefix}{max_no + 1:03d}"
 
 
-def _next_month_ym(d: date | None) -> str:
+def _billing_start_date(d: date | None) -> date:
+    d = d or date.today()
+    y, m = d.year, d.month + 1
+    if m == 13:
+        y += 1
+        m = 1
+    # 다음달 같은 일자가 없으면 말일로 보정
+    import calendar
+    day = min(d.day, calendar.monthrange(y, m)[1])
+    return date(y, m, day)
+
+
     d = d or date.today()
     y, m = d.year, d.month + 1
     if m == 13:
@@ -90,6 +119,21 @@ def _charge_item(membership: str) -> str:
 def _monthly_charge(membership: str) -> int:
     return 10000 if membership == "협회가입" else 5000
 
+
+
+def _pending_note(payload: PendingPayload) -> str | None:
+    parts = []
+    for label, value in [
+        ("주소", payload.address),
+        ("공문 주소", payload.public_address or payload.publicAddress),
+        ("주민등록번호", payload.resident_no or payload.residentNo),
+        ("자격증명 발급번호", payload.cert_issue_no or payload.certIssueNo),
+        ("공문/접수번호", payload.doc_no or payload.docNo),
+        ("비고", payload.note),
+    ]:
+        if value:
+            parts.append(f"{label}:{value}")
+    return " / ".join(parts) if parts else None
 
 def _pending_dict(p: Pending) -> dict:
     return {
@@ -113,6 +157,7 @@ def _pending_dict(p: Pending) -> dict:
         "mgmtNo": p.mgmt_no,
         "expected_charge": p.expected_charge,
         "expectedCharge": p.expected_charge,
+        "billingStartDate": _billing_start_date(p.cert_issue_date).isoformat() if p.cert_issue_date else None,
         "note": p.note,
         "promoted_member_id": p.promoted_member_id,
         "promotedMemberId": p.promoted_member_id,
@@ -145,7 +190,7 @@ def create_pending(payload: PendingPayload, db: Session = Depends(get_db)):
         step_index=1,
         mgmt_no=payload.mgmt_no or payload.mgmtNo,
         expected_charge=_charge_item(membership),
-        note=payload.note,
+        note=_pending_note(payload),
     )
     db.add(p)
     db.commit()
@@ -203,7 +248,7 @@ def promote_pending(pending_id: int, payload: PromotePayload | None = None, db: 
     cert_date = p.cert_issue_date or date.today()
     charge_item = payload.charge_item or payload.chargeItem or _charge_item(membership)
     monthly_charge = payload.monthly_charge or payload.monthlyCharge or _monthly_charge(membership)
-    billing_start_ym = payload.billing_start_ym or payload.billingStartYm or _next_month_ym(cert_date)
+    billing_start_ym = payload.billing_start_ym or payload.billingStartYm or _billing_start_date(cert_date).strftime("%Y-%m")
     mgmt_no = payload.mgmt_no or payload.mgmtNo or p.mgmt_no or _next_mgmt_no(db)
 
     if db.scalar(select(Member).where(Member.mgmt_no == mgmt_no)):

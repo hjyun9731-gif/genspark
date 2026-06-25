@@ -22,7 +22,7 @@ const TITLES = {
 
 function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [route, setRoute] = React.useState("dashboard");
+  const [route, setRoute] = React.useState(()=>localStorage.getItem("misu.route") || "dashboard");
   const [members, setMembers] = React.useState([]);
   const [closures, setClosures] = React.useState([]);
   const [pending, setPending] = React.useState([]);
@@ -45,6 +45,7 @@ function App(){
   }, [t.accent]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(null), 3200); };
+  React.useEffect(()=>{ localStorage.setItem("misu.route", route); }, [route]);
 
   // ── 전체 데이터 새로고침 ──
   const refetchAll = React.useCallback(async (msg) => {
@@ -290,17 +291,17 @@ function App(){
         activeMembers: dashboardData.activeMembers || dashboardData.active_members || 0,
         overdueCount: dashboardData.arrearsCount || dashboardData.arrears_members || 0,
         totalOutstanding: dashboardData.totalArrears || dashboardData.total_arrears_amount || 0,
-        thisMonthCharge: 0,
+        thisMonthCharge: dashboardData.thisMonthCharge || dashboardData.this_month_charge || 0,
         thisMonthCollected: dashboardData.thisMonthPayments || dashboardData.month_payment || 0,
-        prepaid: 0,
+        prepaid: dashboardData.prepaidCount || dashboardData.prepaid || 0,
         highValue: dashboardData.highAmount || dashboardData.high_amount || 0,
         longOverdue: dashboardData.longOverdue || dashboardData.long_overdue || 0,
-        seniors: 0,
+        seniors: dashboardData.seniorCount || dashboardData.seniors || 0,
         disconnected: dashboardData.disconnected || 0,
         certMissing: dashboardData.certMissing || dashboardData.cert_missing || 0,
         regionTop: regionData.map(r => ({ region: r.sigun||r.region, amt: r.total||r.amount||0, count: r.memberCount||r.member_count||0 })),
-        byAccount: {},
-        buckets: [],
+        byAccount: dashboardData.byAccount || dashboardData.by_account || {},
+        buckets: dashboardData.monthBuckets || dashboardData.buckets || [],
         personal: 0, delivery: 0, joined: 0, notJoined: 0,
         longOverdueList: [],
       };
@@ -329,7 +330,7 @@ function App(){
   ) : null;
 
   return (
-    <window.AppShell active={route} onNavigate={(id)=>{ setRoute(id); setDrill(null); }}
+    <window.AppShell active={route} onNavigate={(id)=>{ setRoute(id); setDrill(null); localStorage.setItem("misu.route", id); }}
       title={title} subtitle={subtitle} headerRight={headerRight} density={t.density}>
 
       {dataLoading && <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"80px 0", color:"var(--text-tertiary)", font:"var(--body-md)" }}>데이터를 불러오는 중...</div>}
