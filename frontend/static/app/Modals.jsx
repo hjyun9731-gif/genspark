@@ -22,17 +22,6 @@ const selectBase = { ...inputBase, appearance:"none", cursor:"pointer", paddingR
   backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")",
   backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
 
-
-function memoField(obj, labels){
-  const text = String(obj?.memo || obj?.note || "");
-  const normLabels = labels.map(x=>String(x).replace(/\s+/g,""));
-  for (const part of text.split(/\s*\/\s*/)) {
-    const m = part.match(/^([^:：=]+)[:：=](.*)$/);
-    if (m && normLabels.includes(m[1].replace(/\s+/g,""))) return m[2].trim();
-  }
-  return "";
-}
-
 // ===== 수납 처리 모달 =====
 function PayModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
@@ -360,8 +349,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                   <InfoRow label="회원상태" value={member.status} />
                   <SectionLabel style={{ marginTop:20 }}>연락처 · 주소</SectionLabel>
                   <InfoRow label="핸드폰번호" value={member.phone} />
-                  <InfoRow label="주소" value={member.address || memoField(member,["주소","일반주소"])} />
-                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address || memoField(member,["공문주소","공문 주소"])} />
+                  <InfoRow label="주소" value={member.address} />
+                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address} />
                   <InfoRow label="주민등록번호" value={member.residentNo||member.resident_no} />
                   <InfoRow label="자격증명 발급번호" value={member.certIssueNo||member.cert_issue_no} />
                   <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
@@ -522,7 +511,7 @@ function ClosureModal({ member, onClose, onConfirm }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:520, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:460, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>폐업 / 이탈 등록</div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>

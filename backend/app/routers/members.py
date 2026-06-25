@@ -70,13 +70,6 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
     amount_based_months = math.ceil(max(int(arrears_amount or 0), 0) / monthly_charge_for_months) if monthly_charge_for_months > 0 else 0
     arrears_months_common = max(len(open_items), amount_based_months)
 
-    memo_text = member.memo or ""
-    address_from_memo = _memo_field(memo_text, ["주소", "일반주소", "주 소"])
-    public_address_from_memo = _memo_field(memo_text, ["공문주소", "공문 주소", "공문"])
-    resident_no_from_memo = _memo_field(memo_text, ["주민등록번호", "주민번호"])
-    cert_issue_no_from_memo = _memo_field(memo_text, ["자격증명 발급번호", "자격증명번호"])
-    tel_from_memo = _memo_field(memo_text, ["전화번호"])
-
     out = {
         # DB 원본 필드
         "id": member.id,
@@ -100,14 +93,6 @@ def _member_dict(member: Member, detail: bool = False) -> dict:
         "is_disconnected": member.is_disconnected,
         "cert_missing": member.cert_missing,
         "memo": member.memo,
-        "address": address_from_memo,
-        "public_address": public_address_from_memo,
-        "publicAddress": public_address_from_memo,
-        "resident_no": resident_no_from_memo,
-        "residentNo": resident_no_from_memo,
-        "cert_issue_no": cert_issue_no_from_memo,
-        "certIssueNo": cert_issue_no_from_memo,
-        "tel": tel_from_memo,
         "address": _memo_field(member.memo, ["주소", "주 소"]),
         "public_address": _memo_field(member.memo, ["공문 주소", "공문주소"]),
         "publicAddress": _memo_field(member.memo, ["공문 주소", "공문주소"]),
@@ -239,41 +224,6 @@ def list_members(
         response.headers["X-Page-Size"] = str(size)
     start = max(page - 1, 0) * size
     return filtered[start:start + size]
-
-
-
-
-@router.get("/summary")
-def members_summary(
-    q: str | None = Query(None),
-    sigun: str | None = None,
-    member_type: str | None = None,
-    membership: str | None = None,
-    status: str | None = Query("정상"),
-    has_arrears: bool | None = Query(True),
-    min_balance: int | None = None,
-    max_balance: int | None = None,
-    include_zero: bool = Query(False),
-    include_prepaid: bool = Query(False),
-    min_months: int | None = None,
-    max_months: int | None = None,
-    db: Session = Depends(get_db),
-):
-    data = list_members(q=q, sigun=sigun, member_type=member_type, membership=membership, status=status,
-                        has_arrears=has_arrears, min_balance=min_balance, max_balance=max_balance,
-                        include_zero=include_zero, include_prepaid=include_prepaid,
-                        min_months=min_months, max_months=max_months, page=1, size=20000, db=db)
-    total_balance = sum(max(int(x.get("arrears_amount") or x.get("totalArrears") or 0), 0) for x in data)
-    return {
-        "totalCount": len(data),
-        "currentPageCount": len(data),
-        "totalBalance": total_balance,
-        "unpaidCount": sum(1 for x in data if int(x.get("arrears_amount") or 0) > 0),
-        "paidOrZeroCount": sum(1 for x in data if int(x.get("arrears_amount") or 0) == 0),
-        "prepaidCount": sum(1 for x in data if int(x.get("arrears_amount") or 0) < 0),
-        "over300kCount": sum(1 for x in data if int(x.get("arrears_amount") or 0) >= 300000),
-        "over12MonthsCount": sum(1 for x in data if int(x.get("arrears_months") or x.get("arrearsMonths") or 0) >= 12),
-    }
 
 
 @router.get("/{member_id}")

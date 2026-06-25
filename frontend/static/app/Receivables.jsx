@@ -25,7 +25,6 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [serverRows, setServerRows] = React.useState(null); // null = 아직 미사용
   const [serverLoading, setServerLoading] = React.useState(false);
   const [serverTotal, setServerTotal] = React.useState(0);
-  const [serverSummary, setServerSummary] = React.useState(null);
   const [serverMeta, setServerMeta] = React.useState(null);
 
   React.useEffect(()=>{
@@ -191,11 +190,11 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* 요약 스트립 */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
         {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
           ["전체 조건 합계",won(sumOut),"var(--red-500)"],
           ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
-          ["12개월 이상",`${num(longCnt)}명`,"#B9791A"],["현재 페이지 합계",won(pageSumOut),"var(--text-secondary)"]].map(([l,v,c])=>(
+          ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
           <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 18px", boxShadow:"var(--shadow-xs)" }}>
             <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
             <div style={{ font:"var(--fw-bold) 20px/1.1 var(--font-sans)", color:c, marginTop:4 }}>{v}</div>
