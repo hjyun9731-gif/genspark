@@ -93,11 +93,16 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
         <select value={status} onChange={e=>setStatus(e.target.value)} style={{ appearance:"none", height:42, padding:"0 32px 0 14px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-primary)", backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")", backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" }}>
           {["전체","처리대기","자동매칭","확인필요","미매칭","매칭완료","제외"].map(s=><option key={s}>{s}</option>)}
         </select>
-        <div style={{ marginLeft:"auto", display:"flex", gap:10 }}>
-          <Button variant="tertiary" size="medium" leadingIcon="notes" onClick={()=>setPaste(true)}>붙여넣기 입력</Button>
-          <Button variant="tertiary" size="medium" leadingIcon="check" onClick={autoAll}>자동매칭 전체 반영</Button>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <button type="button" onClick={()=>setPaste(true)}
+            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+            <Icon name="notes" size={14} style={{ color:"#fff" }} />붙여넣기 입력</button>
+          <button type="button" onClick={autoAll}
+            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+            <Icon name="check" size={14} style={{ color:"var(--text-tertiary)" }} />자동매칭 전체 반영</button>
+          <div style={{ width:1, height:20, background:"var(--border-default)" }} />
           <button type="button" onClick={()=>{ if(confirm("현재 통장매칭 결과를 초기화합니다. 수납 반영되지 않은 거래가 대기 상태로 돌아갑니다. 계속하시겠습니까?")) onReset(); }}
-            style={{ height:42, padding:"0 16px", borderRadius:"var(--radius-pill)", border:"1px solid var(--red-100, #FBD5D5)", background:"var(--red-50)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)" }}>매칭결과 초기화</button>
+            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>매칭결과 초기화</button>
         </div>
       </div>
 

@@ -96,51 +96,60 @@ function PendingEditModal({ mode, row, onClose, onSave }){
   const [f, setF] = React.useState(row);
   const set = (k,v)=> setF(s=>({ ...s, [k]:v }));
   const monthly = f.membership==="협회가입" ? (f.reason && f.reason.includes("70세") ? 5000 : 10000) : 5000;
+  const canSave = !!f.name && !!f.vehicleNo;
   const label = { font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", marginBottom:7, display:"block" };
-  const inp = { width:"100%", height:42, padding:"0 14px", boxSizing:"border-box", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)" };
+  const inp = { width:"100%", height:42, padding:"0 14px", boxSizing:"border-box", minWidth:0, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)" };
   const sel = { ...inp, appearance:"none", cursor:"pointer", paddingRight:34, backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")", backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
+  const G2 = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 };
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(10,17,47,0.38)", display:"flex", justifyContent:"center", alignItems:"center", backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:480, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:"min(740px,calc(100vw - 32px))", maxHeight:"85vh", background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", display:"flex", flexDirection:"column" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)", flex:"none" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>{mode==="add"?"예정자 등록":"예정자 수정"}</div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
         </div>
-        <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:14, maxHeight:"70vh", overflow:"auto" }}>
-          <div style={{ display:"flex", gap:12 }}>
-            <div style={{ flex:1 }}><label style={label}>성명</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={inp} placeholder="성명" /></div>
-            <div style={{ flex:1 }}><label style={label}>구분</label>
+        <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:14, overflow:"auto", flex:1 }}>
+          <div style={G2}>
+            <div><label style={label}>성명 *</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={inp} placeholder="성명" /></div>
+            <div><label style={label}>구분</label>
               <div style={{ display:"flex", gap:6 }}>{["신규","예정"].map(k=><button key={k} type="button" onClick={()=>set("kind",k)} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", cursor:"pointer", border: f.kind===k?"1.5px solid var(--brand)":"1px solid var(--border-default)", background: f.kind===k?"var(--brand-subtle)":"var(--white)", color: f.kind===k?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{k}</button>)}</div>
             </div>
           </div>
-          <div style={{ display:"flex", gap:12 }}>
-            <div style={{ flex:1 }}><label style={label}>지역</label>
+          <div style={G2}>
+            <div><label style={label}>지역</label>
               <select value={f.sigun} onChange={e=>set("sigun",e.target.value)} style={sel}>{D.REGIONS.map(r=><option key={r}>{r}</option>)}</select></div>
-            <div style={{ flex:1 }}><label style={label}>가입</label>
+            <div><label style={label}>가입</label>
               <select value={f.membership} onChange={e=>set("membership",e.target.value)} style={sel}>{["협회가입","협회미가입"].map(r=><option key={r}>{r}</option>)}</select></div>
           </div>
-          <div><label style={label}>차량번호</label><input value={f.vehicleNo} onChange={e=>set("vehicleNo",e.target.value)} style={inp} placeholder="강원 80바 1234" /></div>
-          <div style={{ display:"flex", gap:12 }}>
-            <div style={{ flex:1 }}><label style={label}>전화번호</label><input value={f.phone} onChange={e=>set("phone",e.target.value)} style={inp} placeholder="010-0000-0000" /></div>
-            <div style={{ flex:1 }}><label style={label}>부과 시작월</label><input value={f.billingStartYm} onChange={e=>set("billingStartYm",e.target.value)} style={inp} placeholder="2026-07" /></div>
+          <div style={G2}>
+            <div><label style={label}>차량번호 *</label><input value={f.vehicleNo} onChange={e=>set("vehicleNo",e.target.value)} style={inp} placeholder="강원 80바 1234" /></div>
+            <div><label style={label}>전화번호</label><input value={f.phone} onChange={e=>set("phone",e.target.value)} style={inp} placeholder="010-0000-0000" /></div>
           </div>
-          <div><label style={label}>자격증명 발급일</label><input type="date" value={f.certIssueDate||""} onChange={e=>set("certIssueDate",e.target.value)} style={inp} /></div>
+          <div style={G2}>
+            <div><label style={label}>자격증명 발급일</label><input type="date" value={f.certIssueDate||""} onChange={e=>set("certIssueDate",e.target.value)} style={inp} /></div>
+            <div><label style={label}>부과 시작월</label><input value={f.billingStartYm} onChange={e=>set("billingStartYm",e.target.value)} style={inp} placeholder="2026-07" /></div>
+          </div>
+          <div style={G2}>
+            <div><label style={label}>주민등록번호</label><input value={f.resident_no||""} onChange={e=>set("resident_no",e.target.value)} style={inp} placeholder="000000-0000000" /></div>
+            <div><label style={label}>자격증명 발급번호</label><input value={f.cert_issue_no||""} onChange={e=>set("cert_issue_no",e.target.value)} style={inp} placeholder="발급번호" /></div>
+          </div>
+          <div style={G2}>
+            <div><label style={label}>공문/접수번호</label><input value={f.doc_no||""} onChange={e=>set("doc_no",e.target.value)} style={inp} placeholder="공문/접수번호" /></div>
+            <div>
+              <label style={label}>예상 월부과금</label>
+              <div style={{ height:42, display:"flex", alignItems:"center", padding:"0 14px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", border:"1px solid var(--border-subtle)" }}>
+                <b style={{ font:"var(--fw-bold) 16px/1 var(--font-sans)", color:"var(--text-primary)" }}>{window.PMData.won(monthly)}</b>
+              </div>
+            </div>
+          </div>
           <div><label style={label}>주소</label><input value={f.address||""} onChange={e=>set("address",e.target.value)} style={inp} placeholder="주소" /></div>
           <div><label style={label}>공문 주소</label><input value={f.public_address||""} onChange={e=>set("public_address",e.target.value)} style={inp} placeholder="공문 발송 주소" /></div>
-          <div><label style={label}>주민등록번호</label><input value={f.resident_no||""} onChange={e=>set("resident_no",e.target.value)} style={inp} placeholder="000000-0000000" /></div>
-          <div style={{ display:"flex", gap:12 }}>
-            <div style={{ flex:1 }}><label style={label}>자격증명 발급번호</label><input value={f.cert_issue_no||""} onChange={e=>set("cert_issue_no",e.target.value)} style={inp} placeholder="발급번호" /></div>
-            <div style={{ flex:1 }}><label style={label}>공문/접수번호</label><input value={f.doc_no||""} onChange={e=>set("doc_no",e.target.value)} style={inp} placeholder="공문/접수번호" /></div>
-          </div>
           <div><label style={label}>확인사항/비고</label><input value={f.reason||""} onChange={e=>set("reason",e.target.value)} style={inp} placeholder="예: 협회 가입 승인 대기" /></div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"var(--grey-25)", borderRadius:"var(--radius-md)" }}>
-            <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>예상 월부과금</span>
-            <b style={{ font:"var(--fw-bold) 16px/1 var(--font-sans)", color:"var(--text-primary)" }}>{window.PMData.won(monthly)}</b>
-          </div>
+          {!canSave && <div style={{ font:"var(--body-xs)", color:"var(--red-500)" }}>* 성명과 차량번호는 필수 항목입니다.</div>}
         </div>
-        <div style={{ display:"flex", gap:10, padding:"16px 24px", borderTop:"1px solid var(--border-subtle)" }}>
+        <div style={{ display:"flex", gap:10, padding:"16px 24px", borderTop:"1px solid var(--border-subtle)", flex:"none" }}>
           <Button variant="tertiary" size="medium" fullWidth onClick={onClose}>취소</Button>
-          <Button variant="primary" size="medium" fullWidth disabled={!f.name||!f.vehicleNo} onClick={()=>onSave({ ...f, monthlyCharge:monthly })}>{mode==="add"?"등록":"저장"}</Button>
+          <Button variant="primary" size="medium" fullWidth disabled={!canSave} onClick={()=>onSave({ ...f, monthlyCharge:monthly })}>{mode==="add"?"등록":"저장"}</Button>
         </div>
       </div>
     </div>

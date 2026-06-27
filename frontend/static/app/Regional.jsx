@@ -116,11 +116,13 @@ function TabRegional({ members, exclusionRules, onToast }) {
             <RChip key={l} active={minAmt===v} onClick={()=>setMinAmt(v)}>{l}</RChip>
           ))}
         </div>
-        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
-          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최대금액</span>
-          <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
-          {maxAmtInput && <button type="button" onClick={()=>setMaxAmtInput("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>✕</button>}
+        <div style={{ marginBottom:8 }}>
+          <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+              style={{ flex:1, minWidth:0, width:"100%", boxSizing:"border-box", height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            {maxAmtInput && <button type="button" onClick={()=>setMaxAmtInput("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12, flexShrink:0 }}>✕</button>}
+          </div>
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
         <OptToggle label="0원 포함" checked={incZero} onChange={setIncZero} />
@@ -249,13 +251,17 @@ function TabSms({ members, exclusionRules, onToast }) {
             <RChip key={l} active={minAmt===v} onClick={()=>{ setMinAmt(v); setMinAmtInput(String(v)); }}>{l}</RChip>
           ))}
         </div>
-        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
-          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최소</span>
-          <input type="number" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
-            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
-          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최대</span>
-          <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+          <div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
+            <input type="number" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          </div>
+          <div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
+            <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          </div>
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
         <div style={sectionTitle}>제외 조건</div>

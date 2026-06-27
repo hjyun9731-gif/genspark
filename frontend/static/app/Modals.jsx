@@ -22,28 +22,34 @@ const selectBase = { ...inputBase, appearance:"none", cursor:"pointer", paddingR
   backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")",
   backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
 
-// 메모에서 구조화 필드(주소:, 주민등록번호: 등)를 제거하고 순수 메모만 반환
+// 메모에서 구조화 필드(주소:, 원장 비고: 등)를 제거하고 순수 메모만 반환
 function cleanMemo(raw) {
   if (!raw) return "";
-  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
-  return raw.split(/\s*\/\s*/).filter(p => !STRUCTURED.test(p.trim())).join(" / ").trim();
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호|원장(?:\s*전화)?\s*메모|원장\s*비고|미수금\s*비고)\s*[:：]/;
+  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p)).join(" / ").trim();
 }
 // 주민등록번호 앞 6자리만 표시
 function maskResidentNo(v) {
   if (!v) return "—";
   return String(v).replace(/(\d{6})-\d{7}/, "$1-*******");
 }
-// 메모에서 대납자/관련인 이름 추출 (이체, 계좌적기 등 일반 토큰 제외)
+// 메모에서 실제 사람 이름만 추출 (라벨명/일반 토큰 모두 제외, 공백 제거)
 function relatedName(memo) {
   if (!memo) return "";
   const clean = cleanMemo(memo);
   if (!clean) return "";
-  const SKIP = /^(?:이체|계좌|계좌적기|지로\d*|자동이체|관리비|협회비|처리|미납|완납|납부|농협|입금|대납|정상)$/;
+  const BAD = /원장|전화|메모|비고|미수금|주소|핸드폰|주민|자격|발급|번호|이체|계좌|지로|자동|협회|관리|납부|농협|입금|대납|완납|미납/;
   const nameRe = /^[가-힣]([가-힣\s]*[가-힣])?$/;
-  return clean.split(/[,/·:]+/).map(s => s.trim()).filter(p => {
+  const results = [];
+  for (const part of clean.split(/[,·:]+/)) {
+    const p = part.trim();
+    if (!p || BAD.test(p)) continue;
+    if (!nameRe.test(p)) continue;
     const stripped = p.replace(/\s+/g, "");
-    return nameRe.test(p) && !SKIP.test(stripped) && stripped.length >= 2;
-  }).map(n => n.trim()).join(", ");
+    if (stripped.length < 2 || stripped.length > 5) continue;
+    results.push(stripped);
+  }
+  return results.join(", ");
 }
 window.cleanMemo = cleanMemo;
 window.relatedName = relatedName;

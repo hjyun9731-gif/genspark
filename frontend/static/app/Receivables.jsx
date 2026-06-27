@@ -3,19 +3,25 @@ const { Icon } = window.PayroleDesignSystem_9db006;
 
 function _cleanMemo(raw) {
   if (!raw) return "";
-  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
-  return raw.split(/\s*\/\s*/).filter(p => !STRUCTURED.test(p.trim())).join(" / ").trim();
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호|원장(?:\s*전화)?\s*메모|원장\s*비고|미수금\s*비고)\s*[:：]/;
+  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p)).join(" / ").trim();
 }
 function _relatedName(memo) {
   if (!memo) return "";
   const clean = _cleanMemo(memo);
   if (!clean) return "";
-  const SKIP = /^(?:이체|계좌|계좌적기|지로\d*|자동이체|관리비|협회비|처리|미납|완납|납부|농협|입금|대납|정상)$/;
+  const BAD = /원장|전화|메모|비고|미수금|주소|핸드폰|주민|자격|발급|번호|이체|계좌|지로|자동|협회|관리|납부|농협|입금|대납|완납|미납/;
   const nameRe = /^[가-힣]([가-힣\s]*[가-힣])?$/;
-  return clean.split(/[,/·:]+/).map(s => s.trim()).filter(p => {
+  const results = [];
+  for (const part of clean.split(/[,·:]+/)) {
+    const p = part.trim();
+    if (!p || BAD.test(p)) continue;
+    if (!nameRe.test(p)) continue;
     const stripped = p.replace(/\s+/g, "");
-    return nameRe.test(p) && !SKIP.test(stripped) && stripped.length >= 2;
-  }).map(n => n.trim()).join(", ");
+    if (stripped.length < 2 || stripped.length > 5) continue;
+    results.push(stripped);
+  }
+  return results.join(", ");
 }
 
 function Receivables({ members: membersProp, drill, density, onPay, onSelect, onClose, onToast, onRefresh }){
