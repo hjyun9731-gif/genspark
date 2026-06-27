@@ -22,6 +22,32 @@ const selectBase = { ...inputBase, appearance:"none", cursor:"pointer", paddingR
   backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")",
   backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
 
+// 메모에서 구조화 필드(주소:, 주민등록번호: 등)를 제거하고 순수 메모만 반환
+function cleanMemo(raw) {
+  if (!raw) return "";
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
+  return raw.split(/\s*\/\s*/).filter(p => !STRUCTURED.test(p.trim())).join(" / ").trim();
+}
+// 주민등록번호 앞 6자리만 표시
+function maskResidentNo(v) {
+  if (!v) return "—";
+  return String(v).replace(/(\d{6})-\d{7}/, "$1-*******");
+}
+// 메모에서 대납자/관련인 이름 추출 (이체, 계좌적기 등 일반 토큰 제외)
+function relatedName(memo) {
+  if (!memo) return "";
+  const clean = cleanMemo(memo);
+  if (!clean) return "";
+  const SKIP = /^(?:이체|계좌|계좌적기|지로\d*|자동이체|관리비|협회비|처리|미납|완납|납부|농협|입금|대납|정상)$/;
+  const nameRe = /^[가-힣]([가-힣\s]*[가-힣])?$/;
+  return clean.split(/[,/·:]+/).map(s => s.trim()).filter(p => {
+    const stripped = p.replace(/\s+/g, "");
+    return nameRe.test(p) && !SKIP.test(stripped) && stripped.length >= 2;
+  }).map(n => n.trim()).join(", ");
+}
+window.cleanMemo = cleanMemo;
+window.relatedName = relatedName;
+
 // ===== 수납 처리 모달 =====
 function PayModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
@@ -351,7 +377,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                   <InfoRow label="핸드폰번호" value={member.phone} />
                   <InfoRow label="주소" value={member.address||member.addr||member.homeAddress||member.home_address} />
                   <InfoRow label="공문주소" value={member.publicAddress||member.public_address||member.officialAddress||member.official_address} />
-                  <InfoRow label="주민등록번호" value={member.residentNo||member.resident_no} />
+                  <InfoRow label="주민등록번호" value={maskResidentNo(member.residentNo||member.resident_no)} />
                   <InfoRow label="자격증명 발급번호" value={member.certIssueNo||member.cert_issue_no} />
                   <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
                   <InfoRow label="자격증명 발급일" value={member.certIssueDate||member.cert_issue_date||"미발급"} />
@@ -363,8 +389,11 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                   <InfoRow label="최근 납부월" value={member.lastPaymentYm||member.last_payment_ym} />
                   <SectionLabel style={{ marginTop:20 }}>메모</SectionLabel>
                   <div style={{ padding:"10px 14px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-secondary)", lineHeight:1.7, whiteSpace:"pre-wrap", minHeight:48 }}>
-                    {member.memo || "—"}
+                    {cleanMemo(member.memo) || "—"}
                   </div>
+                  {relatedName(member.memo) && (
+                    <InfoRow label="관련명" value={relatedName(member.memo)} />
+                  )}
                 </>
               )}
             </div>

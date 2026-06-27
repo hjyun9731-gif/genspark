@@ -1,6 +1,23 @@
 // 미수금 명단 — 서버사이드 페이지네이션 + 조회·필터·검색·수납처리
 const { Icon } = window.PayroleDesignSystem_9db006;
 
+function _cleanMemo(raw) {
+  if (!raw) return "";
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
+  return raw.split(/\s*\/\s*/).filter(p => !STRUCTURED.test(p.trim())).join(" / ").trim();
+}
+function _relatedName(memo) {
+  if (!memo) return "";
+  const clean = _cleanMemo(memo);
+  if (!clean) return "";
+  const SKIP = /^(?:이체|계좌|계좌적기|지로\d*|자동이체|관리비|협회비|처리|미납|완납|납부|농협|입금|대납|정상)$/;
+  const nameRe = /^[가-힣]([가-힣\s]*[가-힣])?$/;
+  return clean.split(/[,/·:]+/).map(s => s.trim()).filter(p => {
+    const stripped = p.replace(/\s+/g, "");
+    return nameRe.test(p) && !SKIP.test(stripped) && stripped.length >= 2;
+  }).map(n => n.trim()).join(", ");
+}
+
 function Receivables({ members: membersProp, drill, density, onPay, onSelect, onClose, onToast, onRefresh }){
   const D = window.PMData;
   const { won, num } = D;
@@ -278,14 +295,14 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       {/* 테이블 */}
       <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
         <div style={{ maxHeight:"calc(100vh - 430px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1340 }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1480 }}>
             <thead>
               <tr>
                 <Th label="지역" /><Th label="차량번호" /><SortTh label="이름" k="name" /><Th label="계정" />
                 <Th label="기준월" /><SortTh label="미수개월" k="months" align="left" />
                 <SortTh label="원장미수" k="ledger" align="right" /><Th label="수납합계" align="right" />
                 <SortTh label="현재잔액" k="outstanding" align="right" /><Th label="핸드폰번호" />
-                <Th label="주소" />
+                <Th label="주소" /><Th label="관련명" />
                 <Th label="처리상태" /><Th label="최근수납" /><Th label="" align="right" />
               </tr>
             </thead>
@@ -318,6 +335,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                     <td style={{ padding:cellPad, font:"var(--body-sm)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
                       color: m.disconnected?"var(--red-500)":"var(--text-secondary)" }}>{m.phone||"—"}</td>
                     <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={m.address||""}>{m.address||"—"}</td>
+                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--violet-500)", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={_relatedName(m.memo)||""}>{_relatedName(m.memo)||"—"}</td>
                     <td style={{ padding:cellPad }}>
                       {out<0 ? <StatusPill status="선납" /> : out===0 ? <StatusPill status="완납" /> :
                         m.status==="정상" ? <StatusPill status="미납" /> : <MemberStatusChip status={m.status} />}
@@ -337,7 +355,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                 );
               })}
               {rows.length===0 && (
-                <tr><td colSpan={14} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
+                <tr><td colSpan={15} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
               )}
             </tbody>
           </table>

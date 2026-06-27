@@ -5,7 +5,7 @@ from datetime import date
 import math
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
@@ -171,10 +171,22 @@ def list_members(
     stmt = select(Member).options(selectinload(Member.receivable_items), selectinload(Member.payments))
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(
-            (Member.name.like(like)) | (Member.vehicle_no.like(like)) |
-            (Member.mgmt_no.like(like)) | (Member.phone.like(like)) | (Member.memo.like(like))
-        )
+        conditions = [
+            Member.name.like(like),
+            Member.vehicle_no.like(like),
+            Member.mgmt_no.like(like),
+            Member.phone.like(like),
+            Member.memo.like(like),
+        ]
+        q_stripped = re.sub(r"\s+", "", q)
+        if re.match(r"^[가-힣]{2,6}$", q_stripped):
+            # 한글 이름 공백 정규화: "한순례" → 메모의 "한 순 례" 매칭
+            like_stripped = f"%{q_stripped}%"
+            conditions.extend([
+                func.replace(Member.name, " ", "").like(like_stripped),
+                func.replace(Member.memo, " ", "").like(like_stripped),
+            ])
+        stmt = stmt.where(or_(*conditions))
     if sigun:
         stmt = stmt.where(Member.sigun == sigun)
     if member_type:

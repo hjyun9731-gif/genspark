@@ -172,7 +172,18 @@ function ManualMatchModal({ deposit, members, onClose, onMatch, onGroupMatch }){
     const base = members.filter(m=>m.status==="정상");
     if(!q.trim()) return base.slice(0,80);
     const nq = q.trim().toLowerCase(); const nv = D.normVehicle(q);
-    return base.filter(m=>[m.name,m.vehicleNo,m.mgmtNo,m.phone].join(" ").toLowerCase().includes(nq) || (nv && D.normVehicle(m.vehicleNo).includes(nv))).slice(0,80);
+    const nqNorm = q.trim().replace(/\s+/g,"").toLowerCase();
+    return base.filter(m=>{
+      const text = [m.name,m.vehicleNo,m.mgmtNo,m.phone,m.memo||""].join(" ").toLowerCase();
+      if(text.includes(nq)) return true;
+      if(nv && D.normVehicle(m.vehicleNo||"").includes(nv)) return true;
+      if(nqNorm.length>=2){
+        const memoNorm=(m.memo||"").replace(/\s+/g,"").toLowerCase();
+        const nameNorm=(m.name||"").replace(/\s+/g,"").toLowerCase();
+        if(memoNorm.includes(nqNorm)||nameNorm.includes(nqNorm)) return true;
+      }
+      return false;
+    }).slice(0,80);
   }, [members,q]);
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(10,17,47,0.38)", display:"flex", justifyContent:"center", alignItems:"center", backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
