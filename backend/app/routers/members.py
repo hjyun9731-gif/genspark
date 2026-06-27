@@ -260,6 +260,35 @@ def get_member(member_id: str, db: Session = Depends(get_db)):
     return _member_dict(member, detail=True)
 
 
+def _rebuild_memo(existing_memo: str | None, updates: dict) -> str | None:
+    """주소/공문주소 등 구조화 필드를 memo에 반영해 재구성."""
+    FIELD_LABELS = [
+        ("address",       ["주소", "주 소"],                    "주소"),
+        ("public_address", ["공문 주소", "공문주소"],            "공문 주소"),
+        ("resident_no",   ["주민등록번호", "주민번호"],          "주민등록번호"),
+        ("cert_issue_no", ["자격증명 발급번호", "자격증명발급번호"], "자격증명 발급번호"),
+    ]
+    parsed: dict[str, str] = {}
+    for _, aliases, out_label in FIELD_LABELS:
+        v = _memo_field(existing_memo, aliases)
+        if v:
+            parsed[out_label] = v
+    # 업데이트 적용
+    for field, _, out_label in FIELD_LABELS:
+        camel = {"address": "address", "public_address": "publicAddress",
+                 "resident_no": "residentNo", "cert_issue_no": "certIssueNo"}.get(field, field)
+        val = updates.get(field) or updates.get(camel)
+        if val is not None:
+            v = str(val).strip()
+            if v:
+                parsed[out_label] = v
+            elif out_label in parsed:
+                del parsed[out_label]
+    if not parsed:
+        return None
+    return " / ".join(f"{k}:{v}" for k, v in parsed.items())
+
+
 @router.patch("/{member_id}")
 def update_member(member_id: str, payload: MemberUpdate, db: Session = Depends(get_db)):
     member = db.get(Member, member_id)
@@ -290,6 +319,23 @@ def update_member(member_id: str, payload: MemberUpdate, db: Session = Depends(g
         "memo",
     ]
     changed = []
+
+    # 주소/공문주소 등 구조화 필드가 있으면 memo 재구성
+    addr_fields = {
+        "address": getattr(payload, "address", None),
+        "publicAddress": getattr(payload, "publicAddress", None),
+        "public_address": getattr(payload, "public_address", None),
+        "residentNo": getattr(payload, "residentNo", None),
+        "resident_no": getattr(payload, "resident_no", None),
+        "certIssueNo": getattr(payload, "certIssueNo", None),
+        "cert_issue_no": getattr(payload, "cert_issue_no", None),
+    }
+    if any(v is not None for v in addr_fields.values()):
+        new_memo = _rebuild_memo(member.memo, addr_fields)
+        if new_memo != member.memo:
+            member.memo = new_memo
+            changed.append("memo(주소재구성)")
+
     for field in editable_fields:
         value = getattr(payload, field, None)
         if value is not None:

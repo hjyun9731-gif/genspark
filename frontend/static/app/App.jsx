@@ -246,8 +246,9 @@ function App(){
   };
 
   const resetBank = async () => {
+    try { await fetch('/api/deposits/reset', { method: 'POST' }); } catch {}
     await refetchDeposits();
-    showToast('통장매칭 결과 새로고침');
+    showToast('미매칭 거래내역 초기화 완료');
   };
 
   // ── 신규·예정자 ──

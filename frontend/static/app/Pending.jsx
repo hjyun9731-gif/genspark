@@ -41,7 +41,7 @@ function Pending({ pending, onAdd, onUpdate, onDelete, onPromote, onToast }){
         ))}
         <div style={{ marginLeft:"auto", display:"flex", gap:10, alignItems:"center" }}>
           <window.PMUI.SearchBox value={q} onChange={setQ} width={260} placeholder="이름 · 차량번호 · 지역 검색" />
-          <Button variant="primary" size="medium" leadingIcon="add-user" onClick={()=>setEditing({ mode:"add", row:{ name:"", sigun:"춘천시", vehicleNo:"", phone:"", membership:"협회미가입", kind:"신규", billingStartYm:"2026-07", reason:"" } })}>예정자 등록</Button>
+          <Button variant="primary" size="medium" leadingIcon="add-user" onClick={()=>setEditing({ mode:"add", row:{ name:"", sigun:"춘천시", vehicleNo:"", phone:"", membership:"협회미가입", kind:"신규", billingStartYm:"2026-07", reason:"", address:"", public_address:"", resident_no:"", cert_issue_no:"", doc_no:"" } })}>예정자 등록</Button>
         </div>
       </div>
 
@@ -125,7 +125,14 @@ function PendingEditModal({ mode, row, onClose, onSave }){
             <div style={{ flex:1 }}><label style={label}>부과 시작월</label><input value={f.billingStartYm} onChange={e=>set("billingStartYm",e.target.value)} style={inp} placeholder="2026-07" /></div>
           </div>
           <div><label style={label}>자격증명 발급일</label><input type="date" value={f.certIssueDate||""} onChange={e=>set("certIssueDate",e.target.value)} style={inp} /></div>
-          <div><label style={label}>확인사항</label><input value={f.reason} onChange={e=>set("reason",e.target.value)} style={inp} placeholder="예: 협회 가입 승인 대기" /></div>
+          <div><label style={label}>주소</label><input value={f.address||""} onChange={e=>set("address",e.target.value)} style={inp} placeholder="주소" /></div>
+          <div><label style={label}>공문 주소</label><input value={f.public_address||""} onChange={e=>set("public_address",e.target.value)} style={inp} placeholder="공문 발송 주소" /></div>
+          <div><label style={label}>주민등록번호</label><input value={f.resident_no||""} onChange={e=>set("resident_no",e.target.value)} style={inp} placeholder="000000-0000000" /></div>
+          <div style={{ display:"flex", gap:12 }}>
+            <div style={{ flex:1 }}><label style={label}>자격증명 발급번호</label><input value={f.cert_issue_no||""} onChange={e=>set("cert_issue_no",e.target.value)} style={inp} placeholder="발급번호" /></div>
+            <div style={{ flex:1 }}><label style={label}>공문/접수번호</label><input value={f.doc_no||""} onChange={e=>set("doc_no",e.target.value)} style={inp} placeholder="공문/접수번호" /></div>
+          </div>
+          <div><label style={label}>확인사항/비고</label><input value={f.reason||""} onChange={e=>set("reason",e.target.value)} style={inp} placeholder="예: 협회 가입 승인 대기" /></div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"var(--grey-25)", borderRadius:"var(--radius-md)" }}>
             <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>예상 월부과금</span>
             <b style={{ font:"var(--fw-bold) 16px/1 var(--font-sans)", color:"var(--text-primary)" }}>{window.PMData.won(monthly)}</b>

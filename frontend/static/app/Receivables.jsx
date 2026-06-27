@@ -26,6 +26,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [serverLoading, setServerLoading] = React.useState(false);
   const [serverTotal, setServerTotal] = React.useState(0);
   const [serverMeta, setServerMeta] = React.useState(null);
+  const [tabStats, setTabStats] = React.useState(null); // 탭 카운트 전용 (금액 필터 없음)
 
   React.useEffect(()=>{
     if(!drill) return;
@@ -37,6 +38,26 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false);
     setPage(1);
   }, [drill]);
+
+  // 탭 카운트 전용 조회 — 금액 필터 없이 컨텍스트 필터만 적용
+  React.useEffect(()=>{
+    const params = new URLSearchParams();
+    params.set("page", 1); params.set("size", 1);
+    params.set("include_zero", "true"); params.set("include_prepaid", "true");
+    if (query.trim()) params.set("q", query.trim());
+    if (region) params.set("sigun", region);
+    if (membership) params.set("membership", membership);
+    if (account) params.set("member_type", account);
+    if (status && status !== "전체") params.set("status", status);
+    fetch(`/api/members?${params.toString()}`)
+      .then(r => {
+        if (!r.ok) return;
+        const numH = (n) => { const v = parseInt(r.headers.get(n)||"",10); return Number.isFinite(v)?v:null; };
+        const ts = { totalCount:numH("X-Total-Count"), unpaidCount:numH("X-Unpaid-Count"), zeroCount:numH("X-Zero-Count"), prepaidCount:numH("X-Prepaid-Count"), over300kCount:numH("X-Over-300k") };
+        r.json().catch(()=>{});
+        setTabStats(ts);
+      }).catch(()=>{});
+  }, [query, region, membership, account, status]);
 
   // 필터/페이지 변경 시 서버 조회
   React.useEffect(()=>{
@@ -142,12 +163,14 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
 
   const PAY_TABS = [["전체","전체"],["미수있음","미납"],["완납","완납/0원"],["선납","선납/초과"],["30만원이상","30만원↑"]];
   const countByAmount = (key)=> {
-    if (serverMeta) {
-      if(key==="전체") return serverMeta.totalCount ?? rows.length;
-      if(key==="미수있음") return serverMeta.unpaidCount ?? rows.filter(m=>D.outstanding(m)>0).length;
-      if(key==="완납") return serverMeta.zeroCount ?? rows.filter(m=>D.outstanding(m)===0).length;
-      if(key==="선납") return serverMeta.prepaidCount ?? rows.filter(m=>D.outstanding(m)<0).length;
-      if(key==="30만원이상") return serverMeta.over300kCount ?? rows.filter(m=>D.outstanding(m)>=300000).length;
+    // tabStats: 금액 필터 없이 컨텍스트만 적용 → 각 탭의 실제 회원 수를 정확히 반영
+    const src = tabStats || serverMeta;
+    if (src) {
+      if(key==="전체") return src.totalCount ?? 0;
+      if(key==="미수있음") return src.unpaidCount ?? 0;
+      if(key==="완납") return src.zeroCount ?? 0;
+      if(key==="선납") return src.prepaidCount ?? 0;
+      if(key==="30만원이상") return src.over300kCount ?? 0;
     }
     return (membersProp||[]).filter(m=>{
       if (status!=="전체" && m.status!=="정상") return false;

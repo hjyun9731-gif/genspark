@@ -34,8 +34,12 @@ class PendingPayload(BaseModel):
     membership: str | None = None
     reg_type: str | None = None
     regType: str | None = None
+    kind: str | None = None         # 신규/예정 (프론트 UI 구분값, reg_type으로 저장)
+    reason: str | None = None       # 확인사항/비고 (note 내 비고: 로 저장)
     cert_issue_date: date | None = None
     certIssueDate: date | None = None
+    billing_start_ym: str | None = None
+    billingStartYm: str | None = None
     mgmt_no: str | None = None
     mgmtNo: str | None = None
     note: str | None = None
@@ -98,18 +102,9 @@ def _billing_start_date(d: date | None) -> date:
     if m == 13:
         y += 1
         m = 1
-    # 다음달 같은 일자가 없으면 말일로 보정
     import calendar
     day = min(d.day, calendar.monthrange(y, m)[1])
     return date(y, m, day)
-
-
-    d = d or date.today()
-    y, m = d.year, d.month + 1
-    if m == 13:
-        y += 1
-        m = 1
-    return f"{y:04d}-{m:02d}"
 
 
 def _charge_item(membership: str) -> str:
@@ -121,6 +116,17 @@ def _monthly_charge(membership: str) -> int:
 
 
 
+def _extract_note_field(note: str | None, label: str) -> str | None:
+    import re
+    if not note:
+        return None
+    m = re.search(rf"(?:^|\s*/\s*){re.escape(label)}\s*:\s*([^/]+)", note)
+    if m:
+        v = m.group(1).strip()
+        return v if v else None
+    return None
+
+
 def _pending_note(payload: PendingPayload) -> str | None:
     parts = []
     for label, value in [
@@ -129,13 +135,17 @@ def _pending_note(payload: PendingPayload) -> str | None:
         ("주민등록번호", payload.resident_no or payload.residentNo),
         ("자격증명 발급번호", payload.cert_issue_no or payload.certIssueNo),
         ("공문/접수번호", payload.doc_no or payload.docNo),
-        ("비고", payload.note),
+        ("비고", payload.reason or payload.note),
     ]:
         if value:
             parts.append(f"{label}:{value}")
     return " / ".join(parts) if parts else None
 
 def _pending_dict(p: Pending) -> dict:
+    billing_start = _billing_start_date(p.cert_issue_date) if p.cert_issue_date else None
+    monthly = 10000 if p.membership == "협회가입" else 5000
+    # kind: reg_type이 "신규"/"예정"이면 그대로, 아니면 "신규"로 표시
+    kind = p.reg_type if p.reg_type in ("신규", "예정") else "신규"
     return {
         "id": p.id,
         "name": p.name,
@@ -148,6 +158,7 @@ def _pending_dict(p: Pending) -> dict:
         "membership": p.membership,
         "reg_type": p.reg_type,
         "regType": p.reg_type,
+        "kind": kind,
         "cert_issue_date": p.cert_issue_date.isoformat() if p.cert_issue_date else None,
         "certIssueDate": p.cert_issue_date.isoformat() if p.cert_issue_date else None,
         "step": p.step,
@@ -157,8 +168,18 @@ def _pending_dict(p: Pending) -> dict:
         "mgmtNo": p.mgmt_no,
         "expected_charge": p.expected_charge,
         "expectedCharge": p.expected_charge,
-        "billingStartDate": _billing_start_date(p.cert_issue_date).isoformat() if p.cert_issue_date else None,
+        "monthlyCharge": monthly,
+        "monthly_charge": monthly,
+        "billingStartDate": billing_start.isoformat() if billing_start else None,
+        "billingStartYm": billing_start.strftime("%Y-%m") if billing_start else None,
+        "billing_start_ym": billing_start.strftime("%Y-%m") if billing_start else None,
         "note": p.note,
+        "address": _extract_note_field(p.note, "주소"),
+        "public_address": _extract_note_field(p.note, "공문 주소"),
+        "resident_no": _extract_note_field(p.note, "주민등록번호"),
+        "cert_issue_no": _extract_note_field(p.note, "자격증명 발급번호"),
+        "doc_no": _extract_note_field(p.note, "공문/접수번호"),
+        "reason": _extract_note_field(p.note, "비고"),
         "promoted_member_id": p.promoted_member_id,
         "promotedMemberId": p.promoted_member_id,
     }
@@ -177,6 +198,8 @@ def create_pending(payload: PendingPayload, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이름은 필수입니다.")
     cert_date = payload.cert_issue_date or payload.certIssueDate
     membership = payload.membership or "협회미가입"
+    # kind(신규/예정) → reg_type으로 저장
+    reg_type = payload.reg_type or payload.regType or payload.kind or "신규"
     p = Pending(
         name=name,
         vehicle_no=payload.vehicle_no or payload.vehicleNo,
@@ -184,7 +207,7 @@ def create_pending(payload: PendingPayload, db: Session = Depends(get_db)):
         sigun=payload.sigun or "춘천시",
         member_type=payload.member_type or payload.memberType or "택배",
         membership=membership,
-        reg_type=payload.reg_type or payload.regType or "신규",
+        reg_type=reg_type,
         cert_issue_date=cert_date,
         step=payload.step or "예정자 등록",
         step_index=1,
@@ -203,6 +226,7 @@ def update_pending(pending_id: int, payload: PendingPayload, db: Session = Depen
     p = db.get(Pending, pending_id)
     if p is None:
         raise HTTPException(status_code=404, detail="예정자를 찾을 수 없습니다.")
+    new_reg_type = payload.reg_type or payload.regType or payload.kind
     for attr, val in [
         ("name", payload.name),
         ("vehicle_no", payload.vehicle_no or payload.vehicleNo),
@@ -210,14 +234,19 @@ def update_pending(pending_id: int, payload: PendingPayload, db: Session = Depen
         ("sigun", payload.sigun),
         ("member_type", payload.member_type or payload.memberType),
         ("membership", payload.membership),
-        ("reg_type", payload.reg_type or payload.regType),
+        ("reg_type", new_reg_type),
         ("cert_issue_date", payload.cert_issue_date or payload.certIssueDate),
         ("mgmt_no", payload.mgmt_no or payload.mgmtNo),
-        ("note", payload.note),
         ("step", payload.step),
     ]:
         if val is not None:
             setattr(p, attr, val)
+    # note 재구성: address, public_address, reason 등 구조화 필드가 있으면 재조합
+    new_note = _pending_note(payload)
+    if new_note is not None:
+        p.note = new_note
+    elif payload.note is not None:
+        p.note = payload.note
     p.expected_charge = _charge_item(p.membership)
     db.commit()
     db.refresh(p)

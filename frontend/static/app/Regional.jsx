@@ -1,5 +1,5 @@
 // 지역별 미수금 추출 + 문자 대상 + 알토란 추출 + 제외자 관리
-const { Card, Icon, Toggle } = window.PayroleDesignSystem_9db006;
+const { Card, Icon, Toggle, Button } = window.PayroleDesignSystem_9db006;
 
 const TABS_NAV = ["지역별 문자 발송", "문자 대상 추출", "알토란 추출하기", "제외자/지로희망자 관리"];
 
@@ -27,8 +27,23 @@ function RChip({ active, onClick, children }) {
   );
 }
 
-// ── 탭1: 지역별 문자 발송 (기존 지역 모드) ──────────────────────────
-function TabRegional({ members, onToast }) {
+function isExcludedByRules(m, rules, type) {
+  return rules.filter(r => !type || r.exclusionType === type || r.exclusion_type === type).some(r => {
+    const rVno = r.vehicleNo || r.vehicle_no;
+    const rMno = r.mgmtNo || r.mgmt_no;
+    const mVno = m.vehicleNo || m.vehicle_no;
+    const mMno = m.mgmtNo || m.mgmt_no;
+    if (r.memberId && r.memberId === m.id) return true;
+    if (r.member_id && r.member_id === m.id) return true;
+    if (rVno && rVno === mVno) return true;
+    if (rMno && rMno === mMno) return true;
+    if (r.name && r.name === m.name && r.phone && r.phone === m.phone) return true;
+    return false;
+  });
+}
+
+// ── 탭1: 지역별 문자 발송 ──────────────────────────────────────────
+function TabRegional({ members, exclusionRules, onToast }) {
   const D = window.PMData;
   const { won, REGIONS } = D;
   const { ChargeTag } = window.PMUI;
@@ -38,9 +53,12 @@ function TabRegional({ members, onToast }) {
   const [incZero, setIncZero] = React.useState(true);
   const [incPrepaid, setIncPrepaid] = React.useState(true);
   const [minAmt, setMinAmt] = React.useState(0);
+  const [maxAmtInput, setMaxAmtInput] = React.useState("");
+  const [excludeGiro, setExcludeGiro] = React.useState(false);
 
   const toggleRegion = r => setRegions(rs => rs.includes(r) ? rs.filter(x=>x!==r) : [...rs,r]);
   const toggleCharge = c => setCharges(cs => cs.includes(c) ? cs.filter(x=>x!==c) : [...cs,c]);
+  const maxAmt = maxAmtInput !== "" ? parseInt(maxAmtInput, 10) : null;
 
   const filtered = React.useMemo(() => members.filter(m => {
     if (m.status !== "정상") return false;
@@ -51,8 +69,10 @@ function TabRegional({ members, onToast }) {
     if (!incZero && out===0) return false;
     if (!incPrepaid && out<0) return false;
     if (minAmt && out<minAmt) return false;
+    if (maxAmt !== null && !isNaN(maxAmt) && out>maxAmt) return false;
+    if (excludeGiro && isExcludedByRules(m, exclusionRules, "지로희망")) return false;
     return true;
-  }), [members,regions,charges,senior,incZero,incPrepaid,minAmt]);
+  }), [members,regions,charges,senior,incZero,incPrepaid,minAmt,maxAmt,excludeGiro,exclusionRules]);
 
   const groups = React.useMemo(() => {
     const order = REGIONS.filter(r => !regions.length || regions.includes(r));
@@ -91,14 +111,21 @@ function TabRegional({ members, onToast }) {
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
         <div style={sectionTitle}>금액 기준</div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
           {[["전체",0],["50원↑",50],["3만원↑",30000],["30만원↑",300000]].map(([l,v])=>(
             <RChip key={l} active={minAmt===v} onClick={()=>setMinAmt(v)}>{l}</RChip>
           ))}
         </div>
+        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:8 }}>
+          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최대금액</span>
+          <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          {maxAmtInput && <button type="button" onClick={()=>setMaxAmtInput("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>✕</button>}
+        </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
         <OptToggle label="0원 포함" checked={incZero} onChange={setIncZero} />
         <OptToggle label="선납 포함" checked={incPrepaid} onChange={setIncPrepaid} />
+        <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
       </Card>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
@@ -157,27 +184,35 @@ function TabRegional({ members, onToast }) {
 }
 
 // ── 탭2: 문자 대상 추출 ────────────────────────────────────────────
-function TabSms({ members, onToast }) {
+function TabSms({ members, exclusionRules, onToast }) {
   const D = window.PMData;
   const { won, REGIONS } = D;
   const [regions, setRegions] = React.useState([]);
   const [minAmt, setMinAmt] = React.useState(30000);
+  const [minAmtInput, setMinAmtInput] = React.useState("30000");
+  const [maxAmtInput, setMaxAmtInput] = React.useState("");
   const [excludeNoPhone, setExcludeNoPhone] = React.useState(true);
   const [excludeDisconnected, setExcludeDisconnected] = React.useState(true);
   const [excludeAutoPay, setExcludeAutoPay] = React.useState(true);
+  const [excludeGiro, setExcludeGiro] = React.useState(true);
+  const [excludeSms, setExcludeSms] = React.useState(true);
 
   const toggleRegion = r => setRegions(rs => rs.includes(r) ? rs.filter(x=>x!==r) : [...rs,r]);
+  const maxAmt = maxAmtInput !== "" ? parseInt(maxAmtInput, 10) : null;
 
   const filtered = React.useMemo(() => members.filter(m => {
     if (m.status !== "정상") return false;
     if (regions.length && !regions.includes(m.sigun)) return false;
     const out = D.outstanding(m);
-    if (out < (minAmt||30000)) return false;
+    if (out < (minAmt||0)) return false;
+    if (maxAmt !== null && !isNaN(maxAmt) && out > maxAmt) return false;
     if (excludeNoPhone && !m.phone) return false;
     if (excludeDisconnected && m.disconnected) return false;
     if (excludeAutoPay && m.note==="자동이체") return false;
+    if (excludeGiro && isExcludedByRules(m, exclusionRules, "지로희망")) return false;
+    if (excludeSms && isExcludedByRules(m, exclusionRules, "문자제외")) return false;
     return true;
-  }), [members,regions,minAmt,excludeNoPhone,excludeDisconnected,excludeAutoPay]);
+  }), [members,regions,minAmt,maxAmt,excludeNoPhone,excludeDisconnected,excludeAutoPay,excludeGiro,excludeSms,exclusionRules]);
 
   const groups = React.useMemo(() => {
     const order = REGIONS.filter(r => !regions.length || regions.includes(r));
@@ -208,17 +243,27 @@ function TabSms({ members, onToast }) {
           {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
-        <div style={sectionTitle}>최소 미수금</div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
+        <div style={sectionTitle}>금액 기준 (최소 미수금)</div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
           {[["1만원↑",10000],["3만원↑",30000],["10만원↑",100000],["30만원↑",300000]].map(([l,v])=>(
-            <RChip key={l} active={minAmt===v} onClick={()=>setMinAmt(v)}>{l}</RChip>
+            <RChip key={l} active={minAmt===v} onClick={()=>{ setMinAmt(v); setMinAmtInput(String(v)); }}>{l}</RChip>
           ))}
+        </div>
+        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최소</span>
+          <input type="number" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>최대</span>
+          <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+            style={{ flex:1, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
         <div style={sectionTitle}>제외 조건</div>
         <OptToggle label="전화번호 없는 사람 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
         <OptToggle label="결번/반송 제외" checked={excludeDisconnected} onChange={setExcludeDisconnected} />
         <OptToggle label="자동이체자 제외" checked={excludeAutoPay} onChange={setExcludeAutoPay} />
+        <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
+        <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
       </Card>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
@@ -271,57 +316,9 @@ function TabSms({ members, onToast }) {
 }
 
 // ── 탭3: 알토란 추출하기 ──────────────────────────────────────────
-function parseAltoranText(raw) {
-  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  const rows = [];
-  for (const line of lines) {
-    const cols = line.split(/\t/);
-    if (cols.length < 2) continue;
-    const row = {
-      region: "",
-      name: "",
-      vehicleNo: "",
-      phone: "",
-      phone2: "",
-      address: "",
-      note: "",
-      _raw: line,
-    };
-    cols.forEach((v,i)=>{
-      const s = v.trim();
-      if (!s) return;
-      if (!row.region && /시$|군$/.test(s)) { row.region = s; return; }
-      if (!row.name && /^[가-힣]{2,5}$/.test(s) && s.length<=4) { row.name = s; return; }
-      if (!row.vehicleNo && /[가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후]/.test(s) && /\d{4}/.test(s)) { row.vehicleNo = s; return; }
-      if (/^0\d{9,10}$/.test(s.replace(/-/g,""))) {
-        const clean = s.replace(/-/g,"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3");
-        if (!row.phone) row.phone = clean;
-        else if (!row.phone2) row.phone2 = clean;
-        return;
-      }
-      if (!row.address && (s.includes("시")||s.includes("군")||s.includes("도")||s.includes("리")||s.includes("읍")||s.includes("면")||s.length>6)) { row.address = s; return; }
-      if (!row.note && s.length > 1) row.note = s;
-    });
-    if (row.name || row.vehicleNo) rows.push(row);
-  }
-  return rows;
-}
-
-function inferRegion(row, REGIONS) {
-  if (row.region) {
-    const found = REGIONS.find(r => row.region.includes(r.replace("시","").replace("군","")));
-    if (found) return found;
-  }
-  if (row.address) {
-    const found = REGIONS.find(r => row.address.includes(r.replace("시","").replace("군","")));
-    if (found) return found;
-  }
-  return row.region || "미분류";
-}
-
-function TabAltoran({ members, onToast }) {
+function TabAltoran({ members, exclusionRules, onToast }) {
   const D = window.PMData;
-  const { REGIONS, won, outstanding } = D;
+  const { REGIONS, won } = D;
   const today = new Date();
   const [issueMonth, setIssueMonth] = React.useState(String(today.getMonth()+1));
   const [issueYear, setIssueYear] = React.useState(String(today.getFullYear()));
@@ -331,30 +328,29 @@ function TabAltoran({ members, onToast }) {
   const [excludeNoPhone, setExcludeNoPhone] = React.useState(true);
   const [excludeJiro, setExcludeJiro] = React.useState(true);
 
-  // 미수금 있는 정상 회원만
   const eligible = React.useMemo(() => {
     return (members||[]).filter(m => {
       if (m.status !== "정상") return false;
       const amt = m.arrears_amount ?? m.totalArrears ?? 0;
       if (amt <= 0) return false;
       if (excludeNoPhone && !m.phone) return false;
-      if (excludeJiro && (m.memo||"").includes("지로")) return false;
+      // DB 규칙 기준 지로희망자 제외
+      if (excludeJiro && isExcludedByRules(m, exclusionRules, "지로희망")) return false;
       return true;
     });
-  }, [members, excludeNoPhone, excludeJiro]);
+  }, [members, excludeNoPhone, excludeJiro, exclusionRules]);
 
   const noPhone = React.useMemo(() => (members||[]).filter(m => m.status==="정상" && (m.arrears_amount??m.totalArrears??0)>0 && !m.phone).length, [members]);
 
   const groups = React.useMemo(() => {
-    const regionOrder = REGIONS;
     const byRegion = {};
     eligible.forEach(m => {
       const r = m.sigun || "미분류";
       if (!byRegion[r]) byRegion[r] = [];
       byRegion[r].push(m);
     });
-    const result = regionOrder.filter(r=>byRegion[r]?.length).map(r=>({region:r,rows:byRegion[r]}));
-    const others = Object.keys(byRegion).filter(r=>!regionOrder.includes(r));
+    const result = REGIONS.filter(r=>byRegion[r]?.length).map(r=>({region:r,rows:byRegion[r]}));
+    const others = Object.keys(byRegion).filter(r=>!REGIONS.includes(r));
     others.forEach(r => result.push({region:r,rows:byRegion[r]}));
     return result;
   }, [eligible, REGIONS]);
@@ -366,7 +362,6 @@ function TabAltoran({ members, onToast }) {
     const monthLabel = `${issueMonth}월분`;
     const chargeMap = { "협회비": 0, "관리비": 0, "70세": 0 };
 
-    // Sheet1
     const sheet1Headers = ["코드","상호","대표자명","기타사원","핸드폰","거래처구분","품목 코드","지로발행명목","규격(월분)","발행연월일","발행금액"];
     const sheet1Data = [sheet1Headers];
     eligible.forEach((m, idx) => {
@@ -379,24 +374,17 @@ function TabAltoran({ members, onToast }) {
         m.name || "",
         chargeItem,
         (m.phone || m.mobile || m.tel || ""),
-        "S",
-        "00005",
-        chargeItem,
-        monthLabel,
-        issueDate,
-        amt,
+        "S", "00005", chargeItem, monthLabel, issueDate, amt,
       ]);
     });
 
     const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
-    // 발행금액 열(K) 숫자 서식
     const range = XLSX.utils.decode_range(ws1["!ref"]);
     for (let r = 1; r <= range.e.r; r++) {
       const cell = ws1[XLSX.utils.encode_cell({r, c: 10})];
       if (cell) cell.z = "#,##0";
     }
 
-    // 요약 시트
     const totalAmt = eligible.reduce((s,m) => s + (m.arrears_amount ?? m.totalArrears ?? 0), 0);
     const summaryData = [
       ["항목", "건수/금액"],
@@ -410,7 +398,6 @@ function TabAltoran({ members, onToast }) {
       ["발행연월일", issueDate],
     ];
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws1, "Sheet1");
     XLSX.utils.book_append_sheet(wb, ws2, "요약");
@@ -441,7 +428,7 @@ function TabAltoran({ members, onToast }) {
         </div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           <OptToggle label="핸드폰 없는 회원 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
-          <OptToggle label="지로희망자 제외 (메모 기준)" checked={excludeJiro} onChange={setExcludeJiro} />
+          <OptToggle label="지로희망자 제외 (DB 규칙 기준)" checked={excludeJiro} onChange={setExcludeJiro} />
         </div>
       </Card>
 
@@ -496,47 +483,120 @@ function TabAltoran({ members, onToast }) {
   );
 }
 
-// ── 탭4: 제외자/지로희망자 관리 ──────────────────────────────────
-function TabExcluded({ members, onToast }) {
-  const D = window.PMData;
-  const { won } = D;
-  const excluded = members.filter(m => m.note==="자동이체" || m.note==="지로희망" || m.excluded);
+// ── 탭4: 제외자/지로희망자 관리 (DB CRUD) ────────────────────────
+function ExclusionRuleModal({ mode, rule, onClose, onSave }) {
+  const [f, setF] = React.useState({ ...rule });
+  const set = (k,v) => setF(s=>({...s,[k]:v}));
+  const label = { font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", marginBottom:7, display:"block" };
+  const inp = { width:"100%", height:42, padding:"0 14px", boxSizing:"border-box", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)" };
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:200, background:"rgba(10,17,47,0.38)", display:"flex", justifyContent:"center", alignItems:"center", backdropFilter:"blur(2px)" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:480, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
+          <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>{mode==="add"?"제외 규칙 추가":"제외 규칙 수정"}</div>
+          <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>
+        </div>
+        <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:14 }}>
+          <div><label style={label}>제외유형</label>
+            <div style={{ display:"flex", gap:6 }}>
+              {["지로희망","문자제외"].map(t=>(
+                <button key={t} type="button" onClick={()=>set("exclusion_type",t)} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", cursor:"pointer", border: f.exclusion_type===t?"1.5px solid var(--brand)":"1px solid var(--border-default)", background: f.exclusion_type===t?"var(--brand-subtle)":"var(--white)", color: f.exclusion_type===t?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{t}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:12 }}>
+            <div style={{ flex:1 }}><label style={label}>성명</label><input value={f.name||""} onChange={e=>set("name",e.target.value)} style={inp} placeholder="성명" /></div>
+            <div style={{ flex:1 }}><label style={label}>차량번호</label><input value={f.vehicle_no||""} onChange={e=>set("vehicle_no",e.target.value)} style={inp} placeholder="차량번호" /></div>
+          </div>
+          <div style={{ display:"flex", gap:12 }}>
+            <div style={{ flex:1 }}><label style={label}>전화번호</label><input value={f.phone||""} onChange={e=>set("phone",e.target.value)} style={inp} placeholder="010-0000-0000" /></div>
+            <div style={{ flex:1 }}><label style={label}>지역</label><input value={f.sigun||""} onChange={e=>set("sigun",e.target.value)} style={inp} placeholder="춘천시" /></div>
+          </div>
+          <div><label style={label}>메모</label><input value={f.memo||""} onChange={e=>set("memo",e.target.value)} style={inp} placeholder="메모 (선택)" /></div>
+        </div>
+        <div style={{ display:"flex", gap:10, padding:"16px 24px", borderTop:"1px solid var(--border-subtle)" }}>
+          <Button variant="tertiary" size="medium" fullWidth onClick={onClose}>취소</Button>
+          <Button variant="primary" size="medium" fullWidth disabled={!f.exclusion_type} onClick={()=>onSave(f)}>{mode==="add"?"추가":"저장"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabExcluded({ exclusionRules, onRulesChange, onToast }) {
+  const [editing, setEditing] = React.useState(null);
+
+  const deleteRule = async (rule) => {
+    const label = rule.name || rule.vehicleNo || rule.vehicle_no || rule.phone || "규칙";
+    if (!confirm(`"${label}" 제외 규칙을 삭제할까요?`)) return;
+    try {
+      const res = await fetch(`/api/members/exclusion-rules/${rule.id}`, { method:'DELETE' });
+      if (res.ok) { onRulesChange(); onToast("삭제되었습니다."); }
+      else { const j = await res.json().catch(()=>{}); onToast(j?.detail||"삭제 실패"); }
+    } catch(e) { onToast("오류: "+e.message); }
+  };
+
+  const saveRule = async (ruleData) => {
+    const isEdit = ruleData.id != null;
+    const url = isEdit ? `/api/members/exclusion-rules/${ruleData.id}` : '/api/members/exclusion-rules';
+    const method = isEdit ? 'PATCH' : 'POST';
+    try {
+      const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(ruleData) });
+      if (res.ok) { onRulesChange(); onToast(isEdit ? "수정되었습니다." : "추가되었습니다."); setEditing(null); }
+      else { const j = await res.json().catch(()=>{}); onToast(j?.detail||"저장 실패"); }
+    } catch(e) { onToast("오류: "+e.message); }
+  };
+
+  const TYPE_STYLE = {
+    "지로희망": { bg:"#FBF3DA", fg:"#9A7B12" },
+    "문자제외": { bg:"var(--grey-50)", fg:"var(--text-secondary)" },
+  };
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", border:"1px solid var(--border-subtle)" }}>
-        <Icon name="warning" size={16} color="#B9791A" />
-        <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>문자 발송·지역 추출에서 제외된 회원 목록입니다. 지로희망자, 자동이체, 수동 제외자를 관리합니다.</span>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", border:"1px solid var(--border-subtle)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <Icon name="warning" size={16} color="#B9791A" />
+          <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>문자 발송·지역 추출에서 제외할 회원을 DB에 등록합니다. 지로희망자·문자제외자를 관리하세요.</span>
+        </div>
+        <button type="button" onClick={()=>setEditing({ mode:'add', rule:{exclusion_type:'지로희망',name:'',vehicle_no:'',phone:'',sigun:'',memo:''} })} style={{ height:34, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", background:"var(--brand)", color:"#fff", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)" }}>+ 규칙 추가</button>
       </div>
       <Card padded={false}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead><tr>
-            {["지역","성명","차량번호","관리번호","제외사유","미수금","전화번호"].map((h,i)=>(
-              <th key={h} style={{ textAlign:i===5?"right":"left", padding:"10px 18px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+            {["제외유형","성명","차량번호","전화번호","지역","메모","등록일","처리"].map((h,i)=>(
+              <th key={h} style={{ textAlign:i===7?"right":"left", padding:"10px 18px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {excluded.length===0 && (
-              <tr><td colSpan={7} style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>제외자가 없습니다.</td></tr>
-            )}
-            {excluded.map((m,i)=>{
-              const out = D.outstanding(m);
+            {exclusionRules.length===0 && <tr><td colSpan={8} style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>등록된 제외 규칙이 없습니다. 위 "+ 규칙 추가" 버튼으로 추가하세요.</td></tr>}
+            {exclusionRules.map((rule,i)=>{
+              const t = rule.exclusionType || rule.exclusion_type || "";
+              const ts = TYPE_STYLE[t] || { bg:"var(--grey-50)", fg:"var(--text-secondary)" };
               return (
-                <tr key={m.id} style={{ borderBottom:i<excluded.length-1?"1px solid var(--border-subtle)":"none" }}>
-                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{m.sigun||"—"}</td>
-                  <td style={{ padding:"10px 18px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}</td>
-                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||"—"}</td>
-                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{m.mgmtNo||"—"}</td>
+                <tr key={rule.id} style={{ borderBottom:i<exclusionRules.length-1?"1px solid var(--border-subtle)":"none" }}>
                   <td style={{ padding:"10px 18px" }}>
-                    <span style={{ padding:"3px 10px", borderRadius:"var(--radius-pill)", background:"var(--grey-50)", color:"var(--text-secondary)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>{m.note||"제외"}</span>
+                    <span style={{ padding:"3px 10px", borderRadius:"var(--radius-pill)", background:ts.bg, color:ts.fg, font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>{t||"—"}</span>
                   </td>
-                  <td style={{ padding:"10px 18px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:out>0?"var(--red-500)":"var(--text-tertiary)", whiteSpace:"nowrap" }}>{won(out)}</td>
-                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{m.phone||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{rule.name||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.vehicleNo||rule.vehicle_no||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.phone||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.sigun||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={rule.memo||""}>{rule.memo||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{rule.createdAt ? rule.createdAt.slice(0,10) : "—"}</td>
+                  <td style={{ padding:"10px 18px", textAlign:"right", whiteSpace:"nowrap" }}>
+                    <div style={{ display:"inline-flex", gap:6 }}>
+                      <button type="button" onClick={()=>setEditing({ mode:'edit', rule })} style={{ height:26, padding:"0 9px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>수정</button>
+                      <button type="button" onClick={()=>deleteRule(rule)} style={{ height:26, padding:"0 9px", borderRadius:"var(--radius-pill)", border:"1px solid var(--red-100, #FBD5D5)", cursor:"pointer", background:"var(--red-50)", color:"var(--red-500)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>삭제</button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </Card>
+      {editing && <ExclusionRuleModal mode={editing.mode} rule={editing.rule} onClose={()=>setEditing(null)} onSave={saveRule} />}
     </div>
   );
 }
@@ -546,6 +606,14 @@ function Regional({ members, onToast }) {
   const [activeTab, setActiveTab] = React.useState(0);
   const [regionalMembers, setRegionalMembers] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const [exclusionRules, setExclusionRules] = React.useState([]);
+
+  const refetchRules = React.useCallback(() => {
+    fetch('/api/members/exclusion-rules')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setExclusionRules(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     let alive = true;
@@ -555,6 +623,7 @@ function Regional({ members, onToast }) {
       .then(data => { if (alive) setRegionalMembers(Array.isArray(data) ? data : []); })
       .catch(() => { if (alive) setRegionalMembers(members || []); })
       .finally(() => { if (alive) setLoading(false); });
+    refetchRules();
     return () => { alive = false; };
   }, []);
 
@@ -563,7 +632,6 @@ function Regional({ members, onToast }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       {loading && <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역별·문자 대상 전체 데이터를 불러오는 중입니다...</div>}
-      {/* 탭 네비게이션 */}
       <div style={{ display:"flex", gap:0, borderBottom:"2px solid var(--border-subtle)" }}>
         {TABS_NAV.map((t,i)=>(
           <button key={t} type="button" onClick={()=>setActiveTab(i)} style={{
@@ -576,10 +644,10 @@ function Regional({ members, onToast }) {
         ))}
       </div>
 
-      {activeTab===0 && <TabRegional members={sourceMembers} onToast={onToast} />}
-      {activeTab===1 && <TabSms members={sourceMembers} onToast={onToast} />}
-      {activeTab===2 && <TabAltoran members={sourceMembers} onToast={onToast} />}
-      {activeTab===3 && <TabExcluded members={sourceMembers} onToast={onToast} />}
+      {activeTab===0 && <TabRegional members={sourceMembers} exclusionRules={exclusionRules} onToast={onToast} />}
+      {activeTab===1 && <TabSms members={sourceMembers} exclusionRules={exclusionRules} onToast={onToast} />}
+      {activeTab===2 && <TabAltoran members={sourceMembers} exclusionRules={exclusionRules} onToast={onToast} />}
+      {activeTab===3 && <TabExcluded exclusionRules={exclusionRules} onRulesChange={refetchRules} onToast={onToast} />}
     </div>
   );
 }

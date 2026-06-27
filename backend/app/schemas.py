@@ -85,6 +85,13 @@ class MemberUpdate(BaseModel):
     is_disconnected: bool | None = None
     cert_missing: bool | None = None
     memo: str | None = None
+    address: str | None = None
+    public_address: str | None = None
+    publicAddress: str | None = None
+    resident_no: str | None = None
+    residentNo: str | None = None
+    cert_issue_no: str | None = None
+    certIssueNo: str | None = None
 
 
 # ---------- 수납 ----------
@@ -138,6 +145,7 @@ class DepositMatch(BaseModel):
     """POST /deposits/{id}/match — 입금건을 회원에 매칭."""
     member_id: str
     charge_item: str | None = None  # 협회비/관리비/협회가입비/자격증명발급비/기타
+    method: str | None = None       # 통장매칭/카드/현금
 
 
 # ---------- 예정자 ----------

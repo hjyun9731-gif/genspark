@@ -134,6 +134,8 @@ class Closure(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)       # 내용
     unpaid_balance: Mapped[int] = mapped_column(Integer, default=0)        # 미납잔액
     notify_later: Mapped[bool] = mapped_column(Boolean, default=False)     # 추후납부안내
+    collect_status: Mapped[str] = mapped_column(String(20), default="안내전")  # 추심상태
+    last_notice_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # 마지막안내일
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     member: Mapped["Member"] = relationship(back_populates="closures")
@@ -160,6 +162,21 @@ class Pending(Base):
     promoted_member_id: Mapped[str | None] = mapped_column(
         ForeignKey("misu_members.id"), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ExclusionRule(Base):
+    __tablename__ = "misu_exclusion_rules"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    exclusion_type: Mapped[str] = mapped_column(String(20))  # 문자제외/지로희망/자동이체/기타
+    name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    vehicle_no: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    mgmt_no: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sigun: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    member_id: Mapped[str | None] = mapped_column(ForeignKey("misu_members.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -15,19 +15,21 @@ function BankStatusBadge({ status }){
 }
 function diffText(diff){ if(diff==null) return "—"; if(Number(diff)===0) return "일치"; return Number(diff)>0 ? `초과 ${window.PMData.won(diff)}` : `부족 ${window.PMData.won(Math.abs(diff))}`; }
 
-// 수납 반영 액션 — 회비반영(차감) / 가수금 / 잡수입 / 기타 (미차감 기록)
+// 수납 반영 액션 — 회비반영(차감) / 가수금 / 잡수입 / 기타 / 카드결제 / 현금결제
 const INCOME_ACTIONS = [
-  { value:null,           label:"회비반영", green:true },
-  { value:"협회가입비",     label:"가수금" },
-  { value:"자격증명발급비", label:"잡수입" },
-  { value:"기타",          label:"기타" },
+  { value:null,           label:"회비반영",  bg:"var(--green-500)", fg:"#fff" },
+  { value:"협회가입비",     label:"가수금",    bg:"var(--white)",     fg:"var(--text-secondary)", border:true },
+  { value:"자격증명발급비", label:"잡수입",    bg:"var(--white)",     fg:"var(--text-secondary)", border:true },
+  { value:"기타",          label:"기타",      bg:"var(--white)",     fg:"var(--text-secondary)", border:true },
+  { value:"카드결제",       label:"카드결제",  bg:"var(--brand)",     fg:"#fff" },
+  { value:"현금결제",       label:"현금결제",  bg:"#B9791A",          fg:"#fff" },
 ];
 function IncomeActions({ onPick }){
   return (
     <div style={{ display:"inline-flex", gap:5, flexWrap:"wrap", justifyContent:"flex-end" }}>
       {INCOME_ACTIONS.map(a=>(
-        <button key={a.label} type="button" onClick={()=>onPick(a.value)} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border: a.green?"none":"1px solid var(--border-default)", cursor:"pointer",
-          background: a.green?"var(--green-500)":"var(--white)", color: a.green?"#fff":"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>{a.label}</button>
+        <button key={a.label} type="button" onClick={()=>onPick(a.value)} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border: a.border?"1px solid var(--border-default)":"none", cursor:"pointer",
+          background: a.bg, color: a.fg, font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>{a.label}</button>
       ))}
     </div>
   );

@@ -135,7 +135,6 @@ function StatusChangeModal({ row, onClose, onSave, onToast }) {
   const [memo, setMemo] = React.useState("");
 
   const save = async () => {
-    if (!memo.trim()) { onToast && onToast("변경 사유를 입력해주세요."); return; }
     try {
       const res = await fetch(`/api/closures/${row.id}/status`, {
         method:"PATCH",
@@ -171,8 +170,8 @@ function StatusChangeModal({ row, onClose, onSave, onToast }) {
           </div>
         </div>
         <div style={{ marginBottom:20 }}>
-          <label style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", display:"block", marginBottom:8 }}>변경 사유 *</label>
-          <textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={3} placeholder="변경 사유를 입력하세요 (이력에 기록됩니다)"
+          <label style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", display:"block", marginBottom:8 }}>변경 사유 (선택)</label>
+          <textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={3} placeholder="변경 사유 입력 시 이력에 기록됩니다"
             style={{ width:"100%", padding:"10px 12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }} />
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
@@ -279,6 +278,8 @@ function Closures({ closures, onRestore, onStatusChange, onToast }) {
               <Th label="처리구분" />
               <Th label="지역" />
               <Th label="성명" />
+              <Th label="전화번호" />
+              <Th label="주소" />
               <Th label="차량번호" />
               <Th label="관리번호" />
               <Th label="처리일" />
@@ -300,6 +301,8 @@ function Closures({ closures, onRestore, onStatusChange, onToast }) {
                     <td style={{ padding:"10px 14px" }}><CTypeBadge type={displayType} /></td>
                     <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.sigun||"—"}</td>
                     <td style={{ padding:"10px 14px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.name}</td>
+                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.phone||"—"}</td>
+                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={c.address||""}>{c.address||"—"}</td>
                     <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.vehicleNo||"—"}</td>
                     <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.mgmtNo||"—"}</td>
                     <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.processDate||"—"}</td>
@@ -324,7 +327,7 @@ function Closures({ closures, onRestore, onStatusChange, onToast }) {
                 );
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={15} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>
+                <tr><td colSpan={17} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>
               )}
             </tbody>
           </table>

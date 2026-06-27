@@ -429,17 +429,23 @@ def _display_status(deposit: Deposit, candidates: list[Candidate], group_candida
     return "후보확인"
 
 
+_METHOD_ONLY_ITEMS = {"카드결제", "현금결제"}
+
+
 def _apply_member_amount(db: Session, member: Member, amount: int, charge_item: str, paid_date: date, deposit: Deposit, note: str) -> int:
     remain = max(0, int(amount or 0))
     applied = 0
-    if not _is_non_arrears_income(charge_item):
+    # 카드결제/현금결제는 결제수단으로 처리 (미수 차감은 동일, method만 달리 저장)
+    pay_method = charge_item if charge_item in _METHOD_ONLY_ITEMS else "통장매칭"
+    effective_item = None if charge_item in _METHOD_ONLY_ITEMS else charge_item
+    if not _is_non_arrears_income(effective_item):
         for item in _open_items(member):
             if remain <= 0:
                 break
             pay_amount = min(remain, int(item.amount or 0))
             if pay_amount <= 0:
                 continue
-            db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
+            db.add(Payment(member_id=member.id, paid_for_ym=item.ym, charge_item=item.charge_item, amount=pay_amount, method=pay_method, paid_date=paid_date, deposit_id=deposit.id))
             applied += pay_amount
             remain -= pay_amount
             if pay_amount >= int(item.amount or 0):
@@ -449,8 +455,8 @@ def _apply_member_amount(db: Session, member: Member, amount: int, charge_item: 
             member.last_payment_ym = item.ym
     if remain > 0:
         # 미수보다 큰 금액, 선납/0원 회원, 또는 잡수입/가수금은 기록만 남긴다.
-        item_label = charge_item if _is_non_arrears_income(charge_item) else "선납/초과입금"
-        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=item_label, amount=remain, method="통장매칭", paid_date=paid_date, deposit_id=deposit.id))
+        item_label = (effective_item if _is_non_arrears_income(effective_item) else None) or "선납/초과입금"
+        db.add(Payment(member_id=member.id, paid_for_ym=_ym_from_date(paid_date), charge_item=item_label, amount=remain, method=pay_method, paid_date=paid_date, deposit_id=deposit.id))
         applied += remain
     db.add(MemberHistory(member_id=member.id, content=f"{note}: {applied:,}원", actor="system"))
     return applied
@@ -684,6 +690,19 @@ def reset_pending_deposits(db: Session = Depends(get_db)):
     count = len(rows)
     for payment in db.scalars(select(Payment).where(Payment.deposit_id.is_not(None))).all():
         payment.deposit_id = None
+    for row in rows:
+        db.delete(row)
+    db.commit()
+    return {"ok": True, "deleted": count}
+
+
+@router.post("/reset")
+def reset_all_deposits(db: Session = Depends(get_db)):
+    """통장매칭 목록 전체 초기화 — 매칭완료 제외한 대기/미매칭/제외 건만 삭제."""
+    rows = db.scalars(
+        select(Deposit).where(Deposit.status.not_in(["매칭완료"]))
+    ).all()
+    count = len(rows)
     for row in rows:
         db.delete(row)
     db.commit()

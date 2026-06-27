@@ -53,6 +53,8 @@ class ClosureUpdate(BaseModel):
 def _closure_dict(c: Closure) -> dict:
     m = c.member
     calc_unpaid, unpaid_item, unpaid_months = _closure_unpaid_info(m)
+    collect_st = getattr(c, "collect_status", None) or "안내전"
+    last_notice = getattr(c, "last_notice_date", None)
     return {
         "id": c.id,
         "member_id": c.member_id,
@@ -82,10 +84,14 @@ def _closure_dict(c: Closure) -> dict:
         "unpaid_balance": int(c.unpaid_balance or calc_unpaid or 0),
         "unpaidItem": unpaid_item,
         "unpaid_item": unpaid_item,
+        "unpaidItems": unpaid_item,
         "unpaidMonths": unpaid_months,
         "unpaid_months": unpaid_months,
-        "collectStatus": getattr(c, "collect_status", None) or "안내전",
-        "collect_status": getattr(c, "collect_status", None) or "안내전",
+        "unpaidPeriod": f"{unpaid_months}개월" if unpaid_months > 0 else "—",
+        "collectStatus": collect_st,
+        "collect_status": collect_st,
+        "lastNoticeDate": last_notice.isoformat() if last_notice else None,
+        "last_notice_date": last_notice.isoformat() if last_notice else None,
         "notifyLater": c.notify_later,
         "notify_later": c.notify_later,
         "memberStatus": m.status if m else "",
@@ -132,6 +138,7 @@ def update_closure(closure_id: int, payload: ClosureUpdate, db: Session = Depend
 
 @router.patch("/{closure_id}/status")
 def update_closure_status(closure_id: int, payload: ClosureStatusUpdate, db: Session = Depends(get_db)):
+    from datetime import date as _date
     c = db.get(Closure, closure_id)
     if c is None:
         raise HTTPException(status_code=404, detail="폐업/이탈 기록을 찾을 수 없습니다.")
@@ -139,6 +146,17 @@ def update_closure_status(closure_id: int, payload: ClosureStatusUpdate, db: Ses
         c.type = payload.type
         if c.member:
             c.member.status = payload.type
+    if payload.collect_status is not None:
+        try:
+            c.collect_status = payload.collect_status
+        except AttributeError:
+            pass
+        # 추심 상태가 변경될 때 마지막안내일 자동 업데이트
+        try:
+            if payload.collect_status not in (None, "안내전"):
+                c.last_notice_date = _date.today()
+        except AttributeError:
+            pass
     history_note = "상태변경"
     if payload.type:
         history_note += f" → {payload.type}"
