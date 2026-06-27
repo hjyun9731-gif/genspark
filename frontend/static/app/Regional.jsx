@@ -498,9 +498,9 @@ function ExclusionRuleModal({ mode, rule, onClose, onSave }) {
         </div>
         <div style={{ padding:"22px 24px", display:"flex", flexDirection:"column", gap:14 }}>
           <div><label style={label}>제외유형</label>
-            <div style={{ display:"flex", gap:6 }}>
-              {["지로희망","문자제외"].map(t=>(
-                <button key={t} type="button" onClick={()=>set("exclusion_type",t)} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", cursor:"pointer", border: f.exclusion_type===t?"1.5px solid var(--brand)":"1px solid var(--border-default)", background: f.exclusion_type===t?"var(--brand-subtle)":"var(--white)", color: f.exclusion_type===t?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{t}</button>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {["지로희망","문자제외","자동이체","기타"].map(t=>(
+                <button key={t} type="button" onClick={()=>set("exclusion_type",t)} style={{ flex:"1 1 calc(50% - 3px)", height:38, borderRadius:"var(--radius-md)", cursor:"pointer", border: f.exclusion_type===t?"1.5px solid var(--brand)":"1px solid var(--border-default)", background: f.exclusion_type===t?"var(--brand-subtle)":"var(--white)", color: f.exclusion_type===t?"var(--brand-active)":"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>{t}</button>
               ))}
             </div>
           </div>
@@ -509,8 +509,12 @@ function ExclusionRuleModal({ mode, rule, onClose, onSave }) {
             <div style={{ flex:1 }}><label style={label}>차량번호</label><input value={f.vehicle_no||""} onChange={e=>set("vehicle_no",e.target.value)} style={inp} placeholder="차량번호" /></div>
           </div>
           <div style={{ display:"flex", gap:12 }}>
-            <div style={{ flex:1 }}><label style={label}>전화번호</label><input value={f.phone||""} onChange={e=>set("phone",e.target.value)} style={inp} placeholder="010-0000-0000" /></div>
+            <div style={{ flex:1 }}><label style={label}>핸드폰번호</label><input value={f.phone||""} onChange={e=>set("phone",e.target.value)} style={inp} placeholder="010-0000-0000" /></div>
+            <div style={{ flex:1 }}><label style={label}>관리번호</label><input value={f.mgmt_no||""} onChange={e=>set("mgmt_no",e.target.value)} style={inp} placeholder="관리번호" /></div>
+          </div>
+          <div style={{ display:"flex", gap:12 }}>
             <div style={{ flex:1 }}><label style={label}>지역</label><input value={f.sigun||""} onChange={e=>set("sigun",e.target.value)} style={inp} placeholder="춘천시" /></div>
+            <div style={{ flex:1 }}><label style={label}>사유</label><input value={f.reason||""} onChange={e=>set("reason",e.target.value)} style={inp} placeholder="제외 사유" /></div>
           </div>
           <div><label style={label}>메모</label><input value={f.memo||""} onChange={e=>set("memo",e.target.value)} style={inp} placeholder="메모 (선택)" /></div>
         </div>
@@ -550,6 +554,8 @@ function TabExcluded({ exclusionRules, onRulesChange, onToast }) {
   const TYPE_STYLE = {
     "지로희망": { bg:"#FBF3DA", fg:"#9A7B12" },
     "문자제외": { bg:"var(--grey-50)", fg:"var(--text-secondary)" },
+    "자동이체": { bg:"#EAF3FF", fg:"var(--blue-600)" },
+    "기타":     { bg:"var(--green-50)", fg:"var(--green-600)" },
   };
 
   return (
@@ -559,17 +565,17 @@ function TabExcluded({ exclusionRules, onRulesChange, onToast }) {
           <Icon name="warning" size={16} color="#B9791A" />
           <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>문자 발송·지역 추출에서 제외할 회원을 DB에 등록합니다. 지로희망자·문자제외자를 관리하세요.</span>
         </div>
-        <button type="button" onClick={()=>setEditing({ mode:'add', rule:{exclusion_type:'지로희망',name:'',vehicle_no:'',phone:'',sigun:'',memo:''} })} style={{ height:34, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", background:"var(--brand)", color:"#fff", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)" }}>+ 규칙 추가</button>
+        <button type="button" onClick={()=>setEditing({ mode:'add', rule:{exclusion_type:'지로희망',name:'',vehicle_no:'',phone:'',mgmt_no:'',sigun:'',reason:'',memo:''} })} style={{ height:34, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", background:"var(--brand)", color:"#fff", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)" }}>+ 규칙 추가</button>
       </div>
       <Card padded={false}>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead><tr>
-            {["제외유형","성명","차량번호","전화번호","지역","메모","등록일","처리"].map((h,i)=>(
-              <th key={h} style={{ textAlign:i===7?"right":"left", padding:"10px 18px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+            {["제외유형","성명","차량번호","핸드폰번호","관리번호","지역","사유","메모","등록일","처리"].map((h,i)=>(
+              <th key={h} style={{ textAlign:i===9?"right":"left", padding:"10px 18px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", background:"var(--grey-25)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {exclusionRules.length===0 && <tr><td colSpan={8} style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>등록된 제외 규칙이 없습니다. 위 "+ 규칙 추가" 버튼으로 추가하세요.</td></tr>}
+            {exclusionRules.length===0 && <tr><td colSpan={10} style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)" }}>등록된 제외 규칙이 없습니다. 위 "+ 규칙 추가" 버튼으로 추가하세요.</td></tr>}
             {exclusionRules.map((rule,i)=>{
               const t = rule.exclusionType || rule.exclusion_type || "";
               const ts = TYPE_STYLE[t] || { bg:"var(--grey-50)", fg:"var(--text-secondary)" };
@@ -581,8 +587,10 @@ function TabExcluded({ exclusionRules, onRulesChange, onToast }) {
                   <td style={{ padding:"10px 18px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{rule.name||"—"}</td>
                   <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.vehicleNo||rule.vehicle_no||"—"}</td>
                   <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.phone||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{rule.mgmtNo||rule.mgmt_no||"—"}</td>
                   <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{rule.sigun||"—"}</td>
-                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={rule.memo||""}>{rule.memo||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={rule.reason||""}>{rule.reason||"—"}</td>
+                  <td style={{ padding:"10px 18px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={rule.memo||""}>{rule.memo||"—"}</td>
                   <td style={{ padding:"10px 18px", font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{rule.createdAt ? rule.createdAt.slice(0,10) : "—"}</td>
                   <td style={{ padding:"10px 18px", textAlign:"right", whiteSpace:"nowrap" }}>
                     <div style={{ display:"inline-flex", gap:6 }}>

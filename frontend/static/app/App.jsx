@@ -153,20 +153,9 @@ function App(){
     }
   };
 
-  // ── 폐업 상태 변경 ──
+  // ── 폐업 상태 변경 (Closures.jsx StatusChangeModal이 API 직접 호출 후 이 함수를 호출하므로 여기서는 새로고침만)
   const handleClosureStatusChange = async (closureId, patch) => {
-    try {
-      const res = await fetch(`/api/closures/${closureId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) { showToast(`상태 변경 실패: ${res.status}`); return; }
-      await refetchClosures();
-      showToast('상태가 변경되었습니다.');
-    } catch(e) {
-      showToast('상태 변경 중 오류가 발생했습니다.');
-    }
+    await refetchClosures();
   };
 
   // ── 통장 입금내역 저장 (붙여넣기 → 서버 저장 → 로컬 반영) ──
@@ -254,26 +243,60 @@ function App(){
   // ── 신규·예정자 ──
   const addPending = async (row) => {
     try {
-      const res = await fetch('/api/pending', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(row) });
+      const body = {
+        name: row.name, vehicleNo: row.vehicleNo, vehicle_no: row.vehicleNo,
+        phone: row.phone, sigun: row.sigun, membership: row.membership,
+        kind: row.kind, cert_issue_date: row.certIssueDate || null,
+        address: row.address, public_address: row.public_address,
+        resident_no: row.resident_no, cert_issue_no: row.cert_issue_no,
+        doc_no: row.doc_no, reason: row.reason,
+      };
+      const res = await fetch('/api/pending', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
       if (res.ok) { const data = await res.json(); setPending(ps=>[data,...ps]); showToast(`${row.name} 예정자 등록`); }
-      else setPending(ps=>[{ ...row, id:Date.now() },...ps]);
-    } catch { setPending(ps=>[{ ...row, id:Date.now() },...ps]); showToast(`${row.name} 예정자 등록`); }
+      else { const e = await res.json().catch(()=>{}); showToast(`등록 실패: ${e?.detail||res.status}`); }
+    } catch { showToast('예정자 등록 중 오류가 발생했습니다.'); }
   };
   const updatePending = async (row) => {
-    setPending(ps=>ps.map(p=>p.id===row.id?row:p));
-    showToast(`${row.name} 예정자 수정`);
+    try {
+      const body = {
+        name: row.name, vehicleNo: row.vehicleNo, vehicle_no: row.vehicleNo,
+        phone: row.phone, sigun: row.sigun, membership: row.membership,
+        kind: row.kind, cert_issue_date: row.certIssueDate || null,
+        certIssueDate: row.certIssueDate || null,
+        address: row.address, public_address: row.public_address,
+        resident_no: row.resident_no, cert_issue_no: row.cert_issue_no,
+        doc_no: row.doc_no, reason: row.reason,
+      };
+      const res = await fetch(`/api/pending/${row.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      if (res.ok) {
+        const updated = await res.json();
+        setPending(ps=>ps.map(p=>p.id===row.id ? updated : p));
+        showToast(`${row.name} 예정자 수정 완료`);
+      } else {
+        const e = await res.json().catch(()=>{});
+        showToast(`수정 실패: ${e?.detail||res.status}`);
+      }
+    } catch { showToast('예정자 수정 중 오류가 발생했습니다.'); }
   };
   const deletePending = async (row) => {
     try {
-      await fetch(`/api/pending/${row.id}`, { method:'DELETE' });
-    } catch {}
-    setPending(ps=>ps.filter(p=>p.id!==row.id));
-    showToast(`${row.name} 예정자 삭제`);
+      const res = await fetch(`/api/pending/${row.id}`, { method:'DELETE' });
+      if (res.ok) { setPending(ps=>ps.filter(p=>p.id!==row.id)); showToast(`${row.name} 예정자 삭제`); }
+      else { const e = await res.json().catch(()=>{}); showToast(`삭제 실패: ${e?.detail||res.status}`); }
+    } catch { setPending(ps=>ps.filter(p=>p.id!==row.id)); showToast(`${row.name} 예정자 삭제`); }
   };
   const promotePending = async (row) => {
-    setPending(ps=>ps.filter(p=>p.id!==row.id));
-    showToast(`${row.name} 전체자명단 전환 완료`);
-    await refetchAll();
+    try {
+      const res = await fetch(`/api/pending/${row.id}/promote`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({}) });
+      if (res.ok) {
+        setPending(ps=>ps.filter(p=>p.id!==row.id));
+        showToast(`${row.name} 전체자명단 전환 완료`);
+        await refetchAll();
+      } else {
+        const e = await res.json().catch(()=>{});
+        showToast(`전환 실패: ${e?.detail||res.status}`);
+      }
+    } catch { showToast('전체자명단 전환 중 오류가 발생했습니다.'); }
   };
 
   // ── 엑셀 업로드 반영 ──
@@ -303,7 +326,10 @@ function App(){
         regionTop: regionData.map(r => ({ region: r.sigun||r.region, amt: r.total||r.amount||0, count: r.memberCount||r.member_count||0 })),
         byAccount: dashboardData.byAccount || dashboardData.by_account || {},
         buckets: dashboardData.monthBuckets || dashboardData.buckets || [],
-        personal: 0, delivery: 0, joined: 0, notJoined: 0,
+        personal: dashboardData.personalCount || dashboardData.personal_count || dashboardData.personal || 0,
+        delivery: dashboardData.deliveryCount || dashboardData.delivery_count || dashboardData.delivery || 0,
+        joined: dashboardData.joinedCount || dashboardData.joined_count || dashboardData.joined || 0,
+        notJoined: dashboardData.notJoinedCount || dashboardData.not_joined_count || dashboardData.notJoined || 0,
         longOverdueList: [],
       };
     }

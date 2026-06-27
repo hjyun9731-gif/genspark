@@ -105,6 +105,11 @@ def summary(db: Session = Depends(get_db)):
                 k = it.charge_item or m.charge_item or "미분류"
                 by_account[k] = by_account.get(k, 0) + int(it.amount or 0)
 
+    personal_count = sum(1 for m in active if (m.member_type or "") == "개인")
+    delivery_count = sum(1 for m in active if (m.member_type or "") == "택배")
+    joined_count = sum(1 for m in active if (m.membership or "") == "협회가입")
+    not_joined_count = sum(1 for m in active if (m.membership or "") == "협회미가입")
+
     this_month_charge = int(sum(int(m.monthly_charge or 0) for m in active))
     month_payment = db.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
@@ -156,6 +161,14 @@ def summary(db: Session = Depends(get_db)):
         "certMissing": int(cert_missing),
         "byAccount": by_account,
         "monthBuckets": buckets,
+        "personal_count": personal_count,
+        "delivery_count": delivery_count,
+        "joined_count": joined_count,
+        "not_joined_count": not_joined_count,
+        "personalCount": personal_count,
+        "deliveryCount": delivery_count,
+        "joinedCount": joined_count,
+        "notJoinedCount": not_joined_count,
     }
 
 

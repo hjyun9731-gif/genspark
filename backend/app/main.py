@@ -97,6 +97,20 @@ _NO_CACHE_EXTS = {".jsx", ".js", ".html"}
 if STATIC_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
+    # /lookup 공개조회 페이지 (별도 HTML)
+    _LOOKUP_HTML = STATIC_DIR / "lookup.html"
+
+    @app.get("/lookup")
+    @app.get("/public-lookup")
+    def public_lookup_page():
+        if _LOOKUP_HTML.is_file():
+            resp = FileResponse(_LOOKUP_HTML)
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            return resp
+        resp = FileResponse(STATIC_DIR / "index.html")
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp
+
     @app.get("/{full_path:path}")
     def spa(full_path: str):
         candidate = STATIC_DIR / full_path

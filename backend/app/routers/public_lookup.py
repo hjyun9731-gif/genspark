@@ -768,6 +768,110 @@ async def public_arrears_upload(
         })
 
 
+class _PublicLookupPayload:
+    def __init__(self, name: str = "", vehicleLast4: str = "", vehicle_last4: str = ""):
+        self.name = name
+        self.vehicleLast4 = vehicleLast4 or vehicle_last4
+
+
+from pydantic import BaseModel as _BaseModel
+
+class PublicArrearsLookupIn(_BaseModel):
+    name: str = ""
+    vehicleLast4: str = ""
+    vehicle_last4: str = ""
+
+
+@router.post("/api/public/arrears-lookup")
+def public_arrears_lookup_api(payload: PublicArrearsLookupIn, request: Request, db: Session = Depends(get_db)):
+    """협회원 본인 미수금 공개 조회 REST API.
+
+    요청: { "name": "홍길동", "vehicleLast4": "1234" }
+    응답: 본인 정보만, 개인정보(주소/전화/주민번호) 절대 미포함.
+    보안: 입력값과 정확히 일치하는 1건만 표시. 2건 이상이면 협회 문의 안내.
+    """
+    from fastapi.responses import JSONResponse
+
+    ip = client_ip(request)
+    # IP 브루트포스 차단
+    bucket = _FAIL_BUCKET.get(ip)
+    if bucket:
+        if bucket.get("blocked_until", 0) > time.time():
+            return JSONResponse(
+                status_code=429,
+                content={"error": "입력하신 정보로 조회되는 내역이 없습니다. 정보가 맞는지 확인하시거나 협회로 문의해 주세요."},
+            )
+
+    data = {"name": payload.name, "vehicleLast4": payload.vehicleLast4 or payload.vehicle_last4}
+
+    name_input = normalize_name(data.get("name") or data.get("성명") or "")
+    vehicle_last4_input = _digits(data.get("vehicleLast4") or data.get("vehicle_last4") or data.get("차량번호뒤4자리") or "")[-4:]
+
+    FAIL_MSG = "입력하신 정보로 조회되는 내역이 없습니다. 정보가 맞는지 확인하시거나 협회로 문의해 주세요."
+    DUP_MSG  = "동일 정보가 확인되어 정확한 확인을 위해 협회로 문의해 주세요."
+
+    if not name_input or len(vehicle_last4_input) < 4:
+        return JSONResponse(status_code=400, content={"error": "성명과 차량번호 뒷자리 4자리를 모두 입력해 주세요."})
+
+    # Member 테이블에서 직접 조회 (공개 조회 DB 없이도 동작)
+    try:
+        from sqlalchemy.orm import selectinload as _sload
+        from sqlalchemy import select as _select
+        from ..models import Member as _Member, ReceivableItem as _RItem
+
+        stmt = _select(_Member).options(_sload(_Member.receivable_items)).where(
+            _Member.name == name_input,
+            _Member.status == "정상",
+        )
+        candidates = db.scalars(stmt).unique().all()
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": FAIL_MSG})
+
+    # 차량번호 뒷자리 4자리 필터
+    matched = [
+        m for m in candidates
+        if vehicle_last4(m.vehicle_no or "") == vehicle_last4_input
+    ]
+
+    if len(matched) == 0:
+        # 실패 카운트 증가
+        bucket = _FAIL_BUCKET.setdefault(ip, {"fails": 0, "blocked_until": 0})
+        bucket["fails"] = bucket.get("fails", 0) + 1
+        if bucket["fails"] >= MAX_FAILS:
+            bucket["blocked_until"] = time.time() + BLOCK_SECONDS
+        return JSONResponse(status_code=200, content={"found": False, "message": FAIL_MSG})
+
+    if len(matched) >= 2:
+        return JSONResponse(status_code=200, content={"found": False, "message": DUP_MSG})
+
+    # 1건 정확히 일치
+    _FAIL_BUCKET.pop(ip, None)  # 성공 시 차단 초기화
+    m = matched[0]
+    open_items = sorted([x for x in m.receivable_items if (not x.is_paid) and x.amount > 0], key=lambda x: x.ym)
+    arrears_amount = sum(x.amount for x in open_items)
+    monthly = int(m.monthly_charge or 0)
+    amount_months = ((arrears_amount + monthly - 1) // monthly) if monthly > 0 and arrears_amount > 0 else 0
+    arrears_months = max(len(open_items), amount_months)
+
+    # 차량번호 뒷자리만 노출 (전체 번호 절대 미노출)
+    vno_digits = _digits(m.vehicle_no or "")
+    vno_display = f"**{vno_digits[-4:]}" if len(vno_digits) >= 4 else "****"
+
+    # 미납항목 명칭 (개인정보 아닌 항목명만)
+    item_names = sorted({(x.charge_item or m.charge_item or "미분류") for x in open_items})
+
+    return JSONResponse(status_code=200, content={
+        "found": True,
+        "name": name_input,
+        "vehicleDisplay": vno_display,
+        "arrearsAmount": arrears_amount,
+        "arrearsMonths": arrears_months,
+        "unpaidItems": "/".join(item_names) if item_names else "—",
+        "bankAccount": "농협 281-01-137254",
+        "notice": "표시된 금액은 협회 전산 기준이며, 최근 입금분은 반영에 시간이 걸릴 수 있습니다.",
+    })
+
+
 @router.post("/admin/public-arrears/sync", response_class=HTMLResponse)
 def public_arrears_sync(
     request: Request,

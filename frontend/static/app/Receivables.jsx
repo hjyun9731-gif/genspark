@@ -189,8 +189,8 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   function exportCSV(){
     const head = ["지역","차량번호","이름","계정","부과기준일","기준월","미수개월수","원장미수","수납합계","현재잔액","핸드폰번호","주소","처리상태"];
     const lines = [head.join(",")].concat(rows.map(m=>[
-      m.sigun, m.vehicleNo, m.name, m.chargeItem, D.billingBasisDate(m), D.basisYm(m), D.arrearsMonths(m),
-      D.ledgerArrears(m), D.paidTotal(m), D.outstanding(m), m.phone||"-", m.address, m.status,
+      m.sigun, m.vehicleNo||m.vehicle_no, m.name, m.chargeItem||m.charge_item, D.billingBasisDate(m), D.basisYm(m), D.arrearsMonths(m),
+      D.ledgerArrears(m), D.paidTotal(m), D.outstanding(m), m.phone||"-", m.address||"-", m.status,
     ].map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(",")));
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob(["\ufeff"+lines.join("\n")], { type:"text/csv;charset=utf-8" }));
@@ -278,13 +278,14 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       {/* 테이블 */}
       <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
         <div style={{ maxHeight:"calc(100vh - 430px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1180 }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1340 }}>
             <thead>
               <tr>
                 <Th label="지역" /><Th label="차량번호" /><SortTh label="이름" k="name" /><Th label="계정" />
                 <Th label="기준월" /><SortTh label="미수개월" k="months" align="left" />
                 <SortTh label="원장미수" k="ledger" align="right" /><Th label="수납합계" align="right" />
-                <SortTh label="현재잔액" k="outstanding" align="right" /><Th label="전화번호" />
+                <SortTh label="현재잔액" k="outstanding" align="right" /><Th label="핸드폰번호" />
+                <Th label="주소" />
                 <Th label="처리상태" /><Th label="최근수납" /><Th label="" align="right" />
               </tr>
             </thead>
@@ -316,6 +317,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                       color: out>0?"var(--red-500)": out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
                     <td style={{ padding:cellPad, font:"var(--body-sm)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
                       color: m.disconnected?"var(--red-500)":"var(--text-secondary)" }}>{m.phone||"—"}</td>
+                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={m.address||""}>{m.address||"—"}</td>
                     <td style={{ padding:cellPad }}>
                       {out<0 ? <StatusPill status="선납" /> : out===0 ? <StatusPill status="완납" /> :
                         m.status==="정상" ? <StatusPill status="미납" /> : <MemberStatusChip status={m.status} />}
@@ -335,7 +337,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                 );
               })}
               {rows.length===0 && (
-                <tr><td colSpan={13} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
+                <tr><td colSpan={14} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
               )}
             </tbody>
           </table>

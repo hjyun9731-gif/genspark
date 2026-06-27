@@ -183,7 +183,7 @@ function StatusChangeModal({ row, onClose, onSave, onToast }) {
   );
 }
 
-function Closures({ closures, onRestore, onStatusChange, onToast }) {
+function Closures({ closures, onRestore, onStatusChange, onToast, onRefresh }) {
   const D = window.PMData;
   const { won, num } = D;
   const [type, setType] = React.useState("전체");
@@ -219,8 +219,9 @@ function Closures({ closures, onRestore, onStatusChange, onToast }) {
     if (!confirm(`${c.name} 회원의 처리를 취소하고 이전 상태로 되돌립니까?\n이 작업은 이력에 기록됩니다.`)) return;
     try {
       const res = await fetch(`/api/closures/${c.id}/cancel`, { method:"POST" });
-      if (!res.ok) { const j = await res.json(); onToast && onToast(j.detail||"취소 실패"); return; }
-      onRestore && onRestore(c);
+      if (!res.ok) { const j = await res.json().catch(()=>{}); onToast && onToast(j?.detail||"취소 실패"); return; }
+      // cancel API가 폐업 기록을 삭제하므로 onRestore(→restore API 재호출) 대신 onRefresh로 목록 갱신
+      if (typeof onRefresh === 'function') await onRefresh();
       onToast && onToast(`${c.name} 처리가 취소되었습니다.`);
     } catch(e) { onToast && onToast("오류: "+e.message); }
   };
@@ -229,8 +230,9 @@ function Closures({ closures, onRestore, onStatusChange, onToast }) {
     if (!confirm(`${c.name} 회원을 정상 명단으로 복귀할까요?\n미납잔액이 있는 경우 별도 정산이 필요합니다.`)) return;
     try {
       const res = await fetch(`/api/closures/${c.id}/restore`, { method:"POST" });
-      if (!res.ok) { const j = await res.json(); onToast && onToast(j.detail||"복귀 실패"); return; }
-      onRestore && onRestore(c);
+      if (!res.ok) { const j = await res.json().catch(()=>{}); onToast && onToast(j?.detail||"복귀 실패"); return; }
+      // restore API가 폐업 기록을 삭제하므로 onRestore(→restore API 재호출) 대신 onRefresh로 목록 갱신
+      if (typeof onRefresh === 'function') await onRefresh();
       onToast && onToast(`${c.name} 회원이 정상 명단으로 복귀되었습니다.`);
     } catch(e) { onToast && onToast("오류: "+e.message); }
   };
