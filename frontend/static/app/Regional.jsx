@@ -53,6 +53,7 @@ function TabRegional({ members, exclusionRules, onToast }) {
   const [incZero, setIncZero] = React.useState(true);
   const [incPrepaid, setIncPrepaid] = React.useState(true);
   const [minAmt, setMinAmt] = React.useState(0);
+  const [minAmtInput, setMinAmtInput] = React.useState("");
   const [maxAmtInput, setMaxAmtInput] = React.useState("");
   const [excludeGiro, setExcludeGiro] = React.useState(false);
 
@@ -111,17 +112,16 @@ function TabRegional({ members, exclusionRules, onToast }) {
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
         <div style={sectionTitle}>금액 기준</div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-          {[["전체",0],["50원↑",50],["3만원↑",30000],["30만원↑",300000]].map(([l,v])=>(
-            <RChip key={l} active={minAmt===v} onClick={()=>setMinAmt(v)}>{l}</RChip>
-          ))}
-        </div>
-        <div style={{ marginBottom:8 }}>
-          <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+          <div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
+            <input type="number" placeholder="제한없음" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          </div>
+          <div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
             <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-              style={{ flex:1, minWidth:0, width:"100%", boxSizing:"border-box", height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
-            {maxAmtInput && <button type="button" onClick={()=>setMaxAmtInput("")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12, flexShrink:0 }}>✕</button>}
+              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
           </div>
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
@@ -245,12 +245,7 @@ function TabSms({ members, exclusionRules, onToast }) {
           {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
         </div>
         <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
-        <div style={sectionTitle}>금액 기준 (최소 미수금)</div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
-          {[["1만원↑",10000],["3만원↑",30000],["10만원↑",100000],["30만원↑",300000]].map(([l,v])=>(
-            <RChip key={l} active={minAmt===v} onClick={()=>{ setMinAmt(v); setMinAmtInput(String(v)); }}>{l}</RChip>
-          ))}
-        </div>
+        <div style={sectionTitle}>금액 기준</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
           <div>
             <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>

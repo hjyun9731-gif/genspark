@@ -22,11 +22,12 @@ const selectBase = { ...inputBase, appearance:"none", cursor:"pointer", paddingR
   backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")",
   backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
 
-// 메모에서 구조화 필드(주소:, 원장 비고: 등)를 제거하고 순수 메모만 반환
+// 기본정보와 중복되는 구조화 필드(주소/핸드폰/주민번호/자격번호)만 제거, 업무 메모(원장 비고, 미수금 비고 등)는 유지
 function cleanMemo(raw) {
   if (!raw) return "";
-  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호|원장(?:\s*전화)?\s*메모|원장\s*비고|미수금\s*비고)\s*[:：]/;
-  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p)).join(" / ").trim();
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
+  const EMPTY = /^[-\s]*$|^nan$|^None$/i;
+  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p) && !EMPTY.test(p)).join("\n").trim();
 }
 // 주민등록번호 앞 6자리만 표시
 function maskResidentNo(v) {

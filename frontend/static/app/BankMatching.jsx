@@ -101,8 +101,8 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
             style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
             <Icon name="check" size={14} style={{ color:"var(--text-tertiary)" }} />자동매칭 전체 반영</button>
           <div style={{ width:1, height:20, background:"var(--border-default)" }} />
-          <button type="button" onClick={()=>{ if(confirm("현재 통장매칭 결과를 초기화합니다. 수납 반영되지 않은 거래가 대기 상태로 돌아갑니다. 계속하시겠습니까?")) onReset(); }}
-            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>매칭결과 초기화</button>
+          <button type="button" onClick={()=>{ if(confirm("미처리 입금 내역을 삭제합니다.\n매칭완료·반영완료·제외 처리된 건은 유지됩니다.\n계속하시겠습니까?")) onReset(); }}
+            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>미처리 내역 삭제</button>
         </div>
       </div>
 

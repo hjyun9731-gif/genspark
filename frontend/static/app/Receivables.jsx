@@ -3,8 +3,9 @@ const { Icon } = window.PayroleDesignSystem_9db006;
 
 function _cleanMemo(raw) {
   if (!raw) return "";
-  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호|원장(?:\s*전화)?\s*메모|원장\s*비고|미수금\s*비고)\s*[:：]/;
-  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p)).join(" / ").trim();
+  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
+  const EMPTY = /^[-\s]*$|^nan$|^None$/i;
+  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p) && !EMPTY.test(p)).join("\n").trim();
 }
 function _relatedName(memo) {
   if (!memo) return "";
