@@ -251,7 +251,7 @@ def list_members(
     total = len(filtered)
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
-        response.headers["X-Total-Balance"] = str(sum(max(int(x.get("arrears_amount") or 0), 0) for x in filtered))
+        response.headers["X-Total-Balance"] = str(sum(int(x.get("arrears_amount") or 0) for x in filtered if int(x.get("arrears_amount") or 0) > 0))
         response.headers["X-Unpaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) > 0))
         response.headers["X-Zero-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) == 0))
         response.headers["X-Prepaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) < 0))
@@ -421,6 +421,22 @@ def get_member_history(member_id: str, db: Session = Depends(get_db)):
     stmt = select(MemberHistory).where(MemberHistory.member_id == member_id).order_by(MemberHistory.at.desc()).limit(100)
     rows = db.scalars(stmt).all()
     return [{"id": h.id, "content": h.content, "actor": h.actor, "created_at": h.at.isoformat() if h.at else None} for h in rows]
+
+
+@router.post("/admin/cleanup-auto-mgmt-no")
+def cleanup_auto_mgmt_no(db: Session = Depends(get_db)):
+    """자동생성 관리번호(신26-NNN, 회원ID 번호와 일치) 일괄 초기화."""
+    from sqlalchemy import text
+    result = db.execute(text("""
+        UPDATE misu_members
+        SET mgmt_no = NULL
+        WHERE mgmt_no LIKE '신26-%%'
+          AND REGEXP_REPLACE(id, '^M0*', '') = REGEXP_REPLACE(mgmt_no, '^신26-0*', '')
+        RETURNING id, name
+    """))
+    rows = result.fetchall()
+    db.commit()
+    return {"ok": True, "cleared": len(rows), "members": [{"id": r.id, "name": r.name} for r in rows]}
 
 
 @router.post("/{member_id}/closure")

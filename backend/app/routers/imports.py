@@ -96,6 +96,20 @@ def _money(v: Any) -> int:
         return 0
 
 
+def _money_signed(v: Any) -> int:
+    """음수(선납/초과) 포함 금액 파싱. 미수금 잔액 계산에 사용."""
+    s = _clean(v)
+    if not s or s in {"–", "—", "※"}:
+        return 0
+    if s == "-":
+        return 0
+    s = re.sub(r"[^0-9\-]", "", s)
+    try:
+        return int(s or 0)
+    except Exception:
+        return 0
+
+
 def _has_value(v: Any) -> bool:
     s = _clean(v)
     return bool(s) and s not in {"-", "–", "—"}
@@ -493,7 +507,7 @@ def _iter_arrears_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
         for month in range(1, 13):
             col = month_cols.get(month)
             val = row[col] if col is not None and col < len(row) else None
-            money = _money(val)
+            money = _money_signed(val)
             monthly_values[f"{month}월 미수금"] = money
             # 행별 마지막 입력 월: 0도 입력값이면 해당 월을 기준월로 본다.
             if _has_value(val):
@@ -812,9 +826,9 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
 
             # 재업로드 시 해당 회원의 기존 미수 상세를 현재잔액 1건으로 교체한다.
             db.execute(delete(ReceivableItem).where(ReceivableItem.member_id == member.id))
-            amt = _money(row.get("현재 미수금액") or row.get("미수금액"))
+            amt = _money_signed(row.get("현재 미수금액") or row.get("미수금액"))
             ym = row.get("마지막 미수 기준월") or row.get("기준월") or "2026-현재"
-            if amt <= 0:
+            if amt == 0:
                 skipped += 1
                 continue
             db.add(ReceivableItem(member_id=member.id, ym=ym, charge_item=member.charge_item, amount=amt, is_paid=False))
