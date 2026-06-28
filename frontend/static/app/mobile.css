@@ -1,54 +1,56 @@
-/* Mobile responsive overrides — only affects ≤768px */
+/* Mobile responsive utilities — ≤768px */
 @media (max-width: 768px) {
-  /* Scrollable table wrapper */
-  .pm-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
-  /* Card list item */
+  /* Hide PC-only elements */
+  .pm-desktop-only { display: none !important; }
+  /* Show mobile-only elements */
+  .pm-mobile-only { display: block !important; }
+  .pm-mobile-flex { display: flex !important; }
+  /* Touch targets */
+  .pm-touch-target { min-height: 44px !important; }
+  /* Input sizing */
+  .pm-mobile-input { height: 44px !important; font-size: 16px !important; }
+  /* Card list */
   .pm-mobile-card {
     background: var(--white);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border-radius: 12px;
     padding: 14px 16px;
     margin-bottom: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
-  .pm-mobile-card-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 3px 0;
+  .pm-mobile-card:active { background: var(--grey-25); }
+  /* Status badge */
+  .pm-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
   }
-  .pm-mobile-label {
-    font: var(--fw-medium) 11px/1.4 var(--font-sans);
-    color: var(--text-tertiary);
-    flex: none;
-    margin-right: 8px;
+  /* Bottom sheet modal */
+  .pm-bottom-sheet {
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    margin: 0 !important;
   }
-  .pm-mobile-value {
-    font: var(--fw-medium) 13px/1.4 var(--font-sans);
-    color: var(--text-primary);
-    text-align: right;
-    word-break: break-all;
-  }
-
-  /* Sticky footer buttons in modals */
-  .pm-modal-footer-sticky {
+  /* Sticky modal footer */
+  .pm-sticky-footer {
     position: sticky;
     bottom: 0;
     background: var(--white);
     border-top: 1px solid var(--border-subtle);
     padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
     z-index: 10;
   }
-
-  /* Touch-friendly buttons */
-  .pm-btn-touch { min-height: 44px !important; }
-
-  /* Hide on mobile */
-  .pm-hide-mobile { display: none !important; }
-
-  /* Show only on mobile */
-  .pm-show-mobile { display: block !important; }
 }
 
-/* Hide mobile-only elements on desktop */
-.pm-show-mobile { display: none; }
+/* Hidden by default — shown only on mobile */
+.pm-mobile-only { display: none; }
+.pm-mobile-flex { display: none; }
+/* Visible by default — hidden on mobile */
+.pm-desktop-only { display: block; }

@@ -6,8 +6,8 @@ function Backdrop({ onClose, children, align="center" }) {
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:100,
       background:"rgba(10,17,47,0.38)", display:"flex",
-      justifyContent: isMobile ? "center" : (align==="right"?"flex-end":"center"),
-      alignItems: isMobile ? "flex-end" : (align==="right"?"stretch":"center"),
+      justifyContent: align==="right" ? "flex-end" : "center",
+      alignItems: isMobile ? "flex-end" : (align==="right" ? "stretch" : "center"),
       backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
       {children}
     </div>
@@ -91,7 +91,7 @@ function PayModal({ member, onClose, onConfirm }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : 480, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "92vh", display:"flex", flexDirection:"column" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "100%" : 480, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "20px 20px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "92vh", display:"flex", flexDirection:"column" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div>
             <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>수납 반영</div>
@@ -294,9 +294,192 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
     </div>
   );
 
+  // ── MOBILE: full-screen ─────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ position:"fixed", inset:0, zIndex:300, background:"var(--white)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        {/* Sticky top bar */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderBottom:"1px solid var(--border-subtle)", background:"var(--white)", flex:"none" }}>
+          <button type="button" onClick={onClose} style={{ border:"none", background:"none", cursor:"pointer", padding:4, display:"flex" }}>
+            <Icon name="chevron-left" size={24} style={{ color:"var(--text-primary)" }} />
+          </button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ font:"var(--fw-bold) 17px/1 var(--font-sans)", color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{member.name}</div>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:2 }}>{member.vehicleNo||member.vehicle_no} · {member.sigun}</div>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center", flex:"none" }}>
+            {loading && <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>로딩중…</span>}
+            {!editMode && <button onClick={startEdit} style={{ height:34, padding:"0 12px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", cursor:"pointer" }}>수정</button>}
+          </div>
+        </div>
+
+        {/* Summary cards */}
+        <div style={{ display:"flex", gap:8, padding:"12px 16px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", flex:"none" }}>
+          {[
+            ["원장미수", won(ledgerArrears), "var(--text-primary)","var(--white)"],
+            ["수납합계", won(paidTotal), "var(--green-500)","#F0FBF5"],
+            ["현재잔액", won(curBalance), curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--text-tertiary)", curBalance>0?"#FEF0F0":"var(--white)"],
+            ["미수개월", arrearsMonths+"개월", "var(--text-primary)","var(--white)"],
+          ].map(([l,v,c,bg])=>(
+            <div key={l} style={{ flex:1, padding:"8px 10px", borderRadius:"var(--radius-md)", background:bg, border:"1px solid var(--border-subtle)", textAlign:"center" }}>
+              <div style={{ font:"10px/1 var(--font-sans)", color:"var(--text-tertiary)" }}>{l}</div>
+              <div style={{ font:"var(--fw-bold) 13px/1.1 var(--font-sans)", color:c, marginTop:3, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:0, padding:"0 16px", borderBottom:"1px solid var(--border-subtle)", flex:"none", overflowX:"auto" }}>
+          {DETAIL_TABS.map(t=>(
+            <button key={t} type="button" onClick={()=>setTab(t)} style={{
+              border:"none", background:"none", cursor:"pointer", padding:"10px 12px", whiteSpace:"nowrap",
+              font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:tab===t?"var(--brand)":"var(--text-tertiary)",
+              borderBottom:tab===t?"2px solid var(--brand)":"2px solid transparent", marginBottom:-1,
+            }}>{t}</button>
+          ))}
+        </div>
+
+        {/* Scrollable content */}
+        <div style={{ flex:1, overflow:"auto", padding:"16px" }}>
+          {tab==="기본정보" && (
+            <div>
+              {saveError && (
+                <div style={{ padding:"10px 14px", background:"var(--red-50)", border:"1px solid var(--red-200)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--red-600)", marginBottom:16 }}>
+                  {saveError}
+                </div>
+              )}
+              {editMode ? (
+                <>
+                  <SectionLabel>기본 정보 수정</SectionLabel>
+                  <EditRow label="성명 *" fieldKey="name" />
+                  <EditRow label="지역" fieldKey="sigun" options={["", ...SIGUN_LIST]} />
+                  <EditRow label="차량번호" fieldKey="vehicle_no" />
+                  <EditRow label="관리번호" fieldKey="mgmt_no" />
+                  <EditRow label="핸드폰번호" fieldKey="phone" />
+                  <EditRow label="주소" fieldKey="address" />
+                  <EditRow label="공문주소" fieldKey="public_address" />
+                  <EditRow label="가입상태" fieldKey="status" options={["정상","폐업","양도","이관","탈퇴"]} />
+                  <EditRow label="회원구분" fieldKey="member_type" options={["개인","택배","대리"]} />
+                  <EditRow label="가입여부" fieldKey="membership" options={["협회가입","협회미가입"]} />
+                  <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid var(--border-subtle)", alignItems:"flex-start" }}>
+                    <span style={{ font:"var(--fw-medium) 12px/1.4 var(--font-sans)", color:"var(--text-tertiary)", minWidth:90, flex:"none", paddingTop:8 }}>비고</span>
+                    <textarea value={editForm.memo||""} onChange={e=>ef("memo")(e.target.value)} rows={3}
+                      style={{ flex:1, padding:"8px 12px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1.5 var(--font-sans)", color:"var(--text-primary)", resize:"vertical", boxSizing:"border-box" }} />
+                  </div>
+                  <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                    <button onClick={cancelEdit} style={{ flex:1, height:44, borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer" }}>취소</button>
+                    <button onClick={saveEdit} disabled={saving} style={{ flex:2, height:44, borderRadius:"var(--radius-md)", border:"none", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 14px/1 var(--font-sans)", cursor:saving?"wait":"pointer" }}>
+                      {saving?"저장 중…":"저장"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <SectionLabel>회원 기본정보</SectionLabel>
+                  <InfoRow label="성명" value={member.name} strong />
+                  <InfoRow label="지역" value={member.sigun} />
+                  <InfoRow label="차량번호" value={member.vehicleNo||member.vehicle_no} strong mono />
+                  <InfoRow label="관리번호" value={member.mgmtNo||member.mgmt_no} mono />
+                  <InfoRow label="회원구분" value={member.memberType||member.member_type} />
+                  <InfoRow label="가입상태" value={member.membership} />
+                  <InfoRow label="회원상태" value={member.status} />
+                  <SectionLabel style={{ marginTop:20 }}>연락처 · 주소</SectionLabel>
+                  <InfoRow label="핸드폰번호" value={member.phone} />
+                  <InfoRow label="주소" value={member.address||member.addr||member.homeAddress||member.home_address} />
+                  <InfoRow label="공문주소" value={member.publicAddress||member.public_address||member.officialAddress||member.official_address} />
+                  <InfoRow label="주민등록번호" value={maskResidentNo(member.residentNo||member.resident_no)} />
+                  <InfoRow label="자격증명 발급번호" value={member.certIssueNo||member.cert_issue_no} />
+                  <SectionLabel style={{ marginTop:20 }}>자격 · 부과</SectionLabel>
+                  <InfoRow label="자격증명 발급일" value={member.certIssueDate||member.cert_issue_date||"미발급"} />
+                  <InfoRow label="협회 가입일" value={member.assocJoinDate||member.assoc_join_date} />
+                  <InfoRow label="부과시작월" value={member.billingStartYm||member.billing_start_ym} />
+                  <InfoRow label="부과항목" value={member.chargeItem||member.charge_item} />
+                  <InfoRow label="월부과금" value={won(member.monthlyCharge||member.monthly_charge||0)} />
+                  <InfoRow label="70세 감면" value={member.isSenior?"예 (50% 감면)":"아니오"} />
+                  <InfoRow label="최근 납부월" value={member.lastPaymentYm||member.last_payment_ym} />
+                  <SectionLabel style={{ marginTop:20 }}>메모</SectionLabel>
+                  <div style={{ padding:"10px 14px", background:"var(--grey-25)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-secondary)", lineHeight:1.7, whiteSpace:"pre-wrap", minHeight:48 }}>
+                    {cleanMemo(member.memo) || "—"}
+                  </div>
+                  {relatedName(member.memo) && (
+                    <InfoRow label="관련명" value={relatedName(member.memo)} />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {tab==="미수원장" && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+                {[
+                  ["총 원장미수", won(ledgerArrears), curBalance>0?"var(--red-500)":"var(--text-primary)"],
+                  ["수납합계", won(paidTotal), "var(--green-500)"],
+                  ["현재잔액", won(curBalance), curBalance>0?"var(--red-500)":curBalance<0?"var(--violet-500)":"var(--green-500)"],
+                  ["미수개월", arrearsMonths+"개월", "var(--text-primary)"],
+                ].map(([l,v,c])=>(
+                  <div key={l} style={{ padding:"12px 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-subtle)", background:"var(--white)" }}>
+                    <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
+                    <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:c, marginTop:4, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {(member.arrears||[]).map((it,i)=>(
+                <div key={it.id||i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom:"1px solid var(--border-subtle)", background: it.paid||it.is_paid?"var(--grey-25)":"" }}>
+                  <div>
+                    <div style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{it.ym}</div>
+                    <div style={{ font:"var(--body-xs)", color:"var(--text-secondary)", marginTop:2 }}>{it.charge_item||it.item}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color: (it.paid||it.is_paid)?"var(--text-tertiary)":it.amount<0?"var(--violet-500)":"var(--red-500)", fontVariantNumeric:"tabular-nums" }}>{won(it.amount)}</div>
+                    <div style={{ marginTop:3 }}><window.PMUI.StatusPill status={(it.paid||it.is_paid)?"완납":it.amount<0?"선납":"미납"} /></div>
+                  </div>
+                </div>
+              ))}
+              {!(member.arrears||[]).length && <div style={{ padding:"30px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>미수 내역이 없습니다.</div>}
+            </div>
+          )}
+          {tab==="수납내역" && (
+            <div>
+              {(member.payments||[]).length === 0 && (
+                <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-sm)" }}>수납내역이 없습니다.</div>
+              )}
+              {(member.payments||[]).map((p,i)=>(
+                <div key={p.id||i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 0", borderBottom:"1px solid var(--border-subtle)" }}>
+                  <div>
+                    <div style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{p.chargeItem||p.charge_item}</div>
+                    <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:2 }}>{p.paidDate||p.paid_date} · {p.method}</div>
+                    <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:1 }}>대상월 {p.paidForYm||p.paid_for_ym}</div>
+                  </div>
+                  <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:"var(--green-500)", fontVariantNumeric:"tabular-nums" }}>+{won(p.amount)}</div>
+                </div>
+              ))}
+              {(member.payments||[]).length > 0 && (
+                <div style={{ display:"flex", justifyContent:"flex-end", padding:"12px 0", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--green-500)" }}>
+                  합계 {won(paidTotal)}
+                </div>
+              )}
+            </div>
+          )}
+          {tab==="처리이력" && (
+            <div>
+              <HistoryTab memberId={member.id} />
+            </div>
+          )}
+        </div>
+
+        {/* Sticky footer */}
+        <div style={{ padding:"12px 16px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10, flex:"none" }}>
+          <button onClick={()=>onClosure(member)} style={{ height:48, minWidth:90, padding:"0 14px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
+          <button type="button" onClick={()=>onPay(member)} style={{ flex:1, height:48, borderRadius:"var(--radius-pill)", border:"none", background:"var(--brand)", color:"#fff", cursor:"pointer", font:"var(--fw-bold) 15px/1 var(--font-sans)" }}>수납 반영</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── PC LAYOUT ────────────────────────────────────────────────────
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : "min(980px, calc(100vw - 48px))", maxWidth:"100vw", maxHeight: isMobile ? "90vh" : "92vh", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmPop .18s ease", overflow:"hidden" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:"min(980px, calc(100vw - 48px))", maxWidth:"100vw", maxHeight:"92vh", background:"var(--white)", borderRadius:"var(--radius-xl)", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmPop .18s ease", overflow:"hidden" }}>
         {/* 헤더 */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px", borderBottom:"1px solid var(--border-subtle)", background:"var(--white)", zIndex:2, flex:"none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -498,8 +681,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
         </div>
 
         {/* 하단 버튼 */}
-        <div style={{ flex:"none", padding: isMobile ? "12px 16px" : "14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10, position: isMobile ? "sticky" : "static", bottom:0, zIndex:10 }}>
-          <button onClick={()=>onClosure(member)} style={{ height: isMobile ? 44 : 38, minWidth:104, flex:"0 0 auto", padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
+        <div style={{ flex:"none", padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
+          <button onClick={()=>onClosure(member)} style={{ height:38, minWidth:104, flex:"0 0 auto", padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
           <Button variant="primary" size="medium" fullWidth leadingIcon="dollar" onClick={()=>onPay(member)}>수납 반영</Button>
         </div>
       </div>
@@ -558,7 +741,7 @@ function ClosureModal({ member, onClose, onConfirm }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : 460, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "none", display:"flex", flexDirection:"column" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "100%" : 460, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "20px 20px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "none", display:"flex", flexDirection:"column" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>폐업 / 이탈 등록</div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>

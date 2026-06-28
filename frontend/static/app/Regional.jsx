@@ -163,30 +163,47 @@ function TabRegional({ members, exclusionRules, onToast }) {
                 </div>
                 <span style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>소계 {won(sub)}</span>
               </div>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead><tr>
-                  {["관리번호","성명","차량번호","회원구분","부과항목","미수금","전화번호","비고"].map((h,i)=>(
-                    <th key={h} style={{ textAlign:i===5?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {g.rows.map((m,i) => {
+              {isMobile ? (
+                <div style={{ padding:"8px 16px" }}>
+                  {g.rows.map(m => {
                     const out = D.outstanding(m);
                     return (
-                      <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
-                        <td style={{ padding:"10px 20px", font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{m.mgmtNo}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.membership}</td>
-                        <td style={{ padding:"10px 20px" }}><ChargeTag item={m.chargeItem} /></td>
-                        <td style={{ padding:"10px 20px", textAlign:"right", whiteSpace:"nowrap", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:out>0?"var(--red-500)":out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.phone||"—"}</td>
-                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{m.note||"—"}</td>
-                      </tr>
+                      <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)" }}>
+                        <div>
+                          <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</div>
+                          <div style={{ font:"var(--body-xs)", color:"var(--text-secondary)", marginTop:2 }}>{m.vehicleNo||m.vehicle_no} · {m.phone||"전화없음"}</div>
+                        </div>
+                        <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:out>0?"var(--red-500)":"var(--text-tertiary)", textAlign:"right", alignSelf:"center" }}>{won(out)}</div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              ) : (
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead><tr>
+                    {["관리번호","성명","차량번호","회원구분","부과항목","미수금","전화번호","비고"].map((h,i)=>(
+                      <th key={h} style={{ textAlign:i===5?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {g.rows.map((m,i) => {
+                      const out = D.outstanding(m);
+                      return (
+                        <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
+                          <td style={{ padding:"10px 20px", font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{m.mgmtNo}</td>
+                          <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}</td>
+                          <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
+                          <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.membership}</td>
+                          <td style={{ padding:"10px 20px" }}><ChargeTag item={m.chargeItem} /></td>
+                          <td style={{ padding:"10px 20px", textAlign:"right", whiteSpace:"nowrap", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:out>0?"var(--red-500)":out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
+                          <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.phone||"—"}</td>
+                          <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{m.note||"—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </Card>
           );
         })}
@@ -310,26 +327,43 @@ function TabSms({ members, exclusionRules, onToast }) {
                 <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>· {g.rows.length}명</span>
               </div>
             </div>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr>
-                {["성명","차량번호","전화번호","미수금"].map((h,i)=>(
-                  <th key={h} style={{ textAlign:i===3?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {g.rows.map((m,i)=>{
+            {isMobile ? (
+              <div style={{ padding:"8px 16px" }}>
+                {g.rows.map(m => {
                   const out = D.outstanding(m);
                   return (
-                    <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
-                      <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.phone||"—"}</td>
-                      <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(out)}</td>
-                    </tr>
+                    <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)" }}>
+                      <div>
+                        <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</div>
+                        <div style={{ font:"var(--body-xs)", color:"var(--text-secondary)", marginTop:2 }}>{m.vehicleNo||m.vehicle_no} · {m.phone||"전화없음"}</div>
+                      </div>
+                      <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:"var(--red-500)", textAlign:"right", alignSelf:"center" }}>{won(out)}</div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>
+                  {["성명","차량번호","전화번호","미수금"].map((h,i)=>(
+                    <th key={h} style={{ textAlign:i===3?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {g.rows.map((m,i)=>{
+                    const out = D.outstanding(m);
+                    return (
+                      <tr key={m.id} style={{ borderBottom: i<g.rows.length-1?"1px solid var(--border-subtle)":"none" }}>
+                        <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{m.vehicleNo||m.vehicle_no}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.phone||"—"}</td>
+                        <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(out)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </Card>
         ))}
         {groups.length===0&&<Card><div style={{padding:"40px",textAlign:"center",color:"var(--text-tertiary)"}}>조건에 해당하는 문자 대상이 없습니다.</div></Card>}
@@ -560,28 +594,45 @@ function TabAltoran({ members, exclusionRules, onToast }) {
               <span style={{ font:"var(--fw-demibold) 15px/1 var(--font-sans)", color:"var(--text-primary)" }}>{g.region}</span>
               <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>· {g.rows.length}명</span>
             </div>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr>
-                {["순번","성명","차량번호","부과항목","핸드폰","현재잔액"].map((h,i)=>(
-                  <th key={h} style={{ textAlign:i===5?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {g.rows.map((r,i)=>{
+            {isMobile ? (
+              <div style={{ padding:"8px 16px" }}>
+                {g.rows.map((r,i) => {
                   const amt = D.outstanding ? D.outstanding(r) : (r.arrears_amount ?? r.totalArrears ?? 0);
                   return (
-                    <tr key={r.id||i} style={{ borderBottom:i<g.rows.length-1?"1px solid var(--border-subtle)":"none", background:!r.phone?"var(--amber-25,#FFFBEB)":"" }}>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{i+1}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{r.name||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.vehicleNo||r.vehicle_no||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.chargeItem||r.charge_item||"—"}</td>
-                      <td style={{ padding:"10px 20px", font:"var(--body-sm)", whiteSpace:"nowrap", color:r.phone?"var(--text-primary)":"var(--amber-500)" }}>{r.phone||"전화없음"}</td>
-                      <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(amt)}</td>
-                    </tr>
+                    <div key={r.id||i} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)", background:!r.phone?"var(--amber-25,#FFFBEB)":"" }}>
+                      <div>
+                        <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{r.name||"—"}</div>
+                        <div style={{ font:"var(--body-xs)", color:r.phone?"var(--text-secondary)":"var(--amber-500)", marginTop:2 }}>{r.vehicleNo||r.vehicle_no||"—"} · {r.phone||"전화없음"}</div>
+                      </div>
+                      <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:"var(--red-500)", textAlign:"right", alignSelf:"center" }}>{won(amt)}</div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>
+                  {["순번","성명","차량번호","부과항목","핸드폰","현재잔액"].map((h,i)=>(
+                    <th key={h} style={{ textAlign:i===5?"right":"left", padding:"9px 20px", whiteSpace:"nowrap", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", borderBottom:"1px solid var(--border-subtle)" }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {g.rows.map((r,i)=>{
+                    const amt = D.outstanding ? D.outstanding(r) : (r.arrears_amount ?? r.totalArrears ?? 0);
+                    return (
+                      <tr key={r.id||i} style={{ borderBottom:i<g.rows.length-1?"1px solid var(--border-subtle)":"none", background:!r.phone?"var(--amber-25,#FFFBEB)":"" }}>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-tertiary)" }}>{i+1}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{r.name||"—"}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{r.vehicleNo||r.vehicle_no||"—"}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.chargeItem||r.charge_item||"—"}</td>
+                        <td style={{ padding:"10px 20px", font:"var(--body-sm)", whiteSpace:"nowrap", color:r.phone?"var(--text-primary)":"var(--amber-500)" }}>{r.phone||"전화없음"}</td>
+                        <td style={{ padding:"10px 20px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--red-500)", whiteSpace:"nowrap" }}>{won(amt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </Card>
         ))}
 

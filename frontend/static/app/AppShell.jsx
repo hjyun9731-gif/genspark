@@ -13,6 +13,23 @@ const NAV = [
   { id: "certprint", icon: "document",    label: "자격증명 인쇄" },
 ];
 
+const BOTTOM_TABS = [
+  { id: "dashboard", label: "대시보드", icon: "home" },
+  { id: "list",      label: "미수금",   icon: "list" },
+  { id: "bank",      label: "매칭",     icon: "card" },
+  { id: "regional",  label: "문자",     icon: "earth" },
+  { id: "more",      label: "더보기",   icon: null },
+];
+
+const MORE_NAV = [
+  { id: "closure",   icon: "warning",      label: "폐업현황" },
+  { id: "pending",   icon: "add-user",     label: "신규 · 예정자" },
+  { id: "history",   icon: "transactions", label: "수납 내역" },
+  { id: "upload",    icon: "cloud",        label: "엑셀 업로드" },
+  { id: "certprint", icon: "document",     label: "자격증명 인쇄" },
+  { id: "settings",  icon: "settings",     label: "설정" },
+];
+
 function BrandMark(){
   return (
     <div style={{ display:"flex", alignItems:"center", gap:10, padding:"0 6px" }}>
@@ -36,46 +53,87 @@ function BrandMark(){
 
 function AppShell({ active, onNavigate, title, subtitle, headerRight, children, density }){
   const isMobile = window.useMobile ? window.useMobile() : false;
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [moreOpen, setMoreOpen] = React.useState(false);
 
-  // On mobile: sidebar becomes a drawer overlay
-  const sidebarStyle = isMobile ? {
-    position: 'fixed', top: 0, left: drawerOpen ? 0 : -280, width: 256, height: '100%',
-    background: 'var(--white)', borderRight: '1px solid var(--border-subtle)',
-    padding: '24px 16px', display: 'flex', flexDirection: 'column',
-    boxSizing: 'border-box', zIndex: 200, transition: 'left .22s ease',
-    overflowY: 'auto',
-  } : {
-    width: 256, flex: 'none', background: 'var(--white)',
-    borderRight: '1px solid var(--border-subtle)',
-    padding: '24px 16px', display: 'flex', flexDirection: 'column',
-    height: '100%', boxSizing: 'border-box',
-  };
+  // ── MOBILE LAYOUT ───────────────────────────────────────────────
+  if (isMobile) {
+    const handleNav = (id) => { setMoreOpen(false); onNavigate(id); };
+    const isMoreActive = MORE_NAV.some(n => n.id === active);
 
+    return (
+      <div style={{ height:"100%", display:"flex", flexDirection:"column", fontFamily:"var(--font-sans)", background:"var(--surface-canvas)" }}>
+        {/* More drawer overlay */}
+        {moreOpen && (
+          <>
+            <div onClick={() => setMoreOpen(false)}
+              style={{ position:"fixed", inset:0, background:"rgba(10,17,47,0.38)", zIndex:300, backdropFilter:"blur(2px)" }} />
+            <div style={{ position:"fixed", left:0, right:0, bottom:60, zIndex:301, background:"var(--white)", borderRadius:"20px 20px 0 0", boxShadow:"0 -4px 24px rgba(0,0,0,.12)", padding:"12px 0 8px" }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:"var(--grey-200)", margin:"0 auto 16px" }} />
+              {MORE_NAV.map(item => (
+                <button key={item.id} type="button" onClick={() => handleNav(item.id)}
+                  style={{ display:"flex", alignItems:"center", gap:14, width:"100%", padding:"14px 24px", border:"none", background: active===item.id?"var(--brand-subtle)":"transparent", cursor:"pointer", textAlign:"left" }}>
+                  <Icon name={item.icon} size={20} style={{ color: active===item.id?"var(--brand)":"var(--text-secondary)" }} />
+                  <span style={{ font:"var(--fw-medium) 15px/1 var(--font-sans)", color: active===item.id?"var(--brand)":"var(--text-primary)" }}>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Mobile top header */}
+        <header style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 16px", background:"var(--white)", borderBottom:"1px solid var(--border-subtle)", flex:"none", minHeight:54 }}>
+          <div style={{ width:30, height:30, borderRadius:8, background:"var(--brand)", display:"flex", alignItems:"center", justifyContent:"center", flex:"none" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h8A1.5 1.5 0 0 1 14 7.5V16H3V7.5Z" fill="#fff"/>
+              <path d="M14 9.5h3.7c.5 0 .96.25 1.24.66L21 13v3h-7V9.5Z" fill="#fff" opacity="0.85"/>
+              <circle cx="7" cy="17.5" r="2.1" fill="#fff" stroke="var(--brand)" strokeWidth="1.4"/>
+              <circle cx="17" cy="17.5" r="2.1" fill="#fff" stroke="var(--brand)" strokeWidth="1.4"/>
+            </svg>
+          </div>
+          <span style={{ font:"var(--fw-bold) 17px/1 var(--font-sans)", color:"var(--text-primary)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{title}</span>
+          {headerRight && <div style={{ display:"flex", gap:8, flex:"none" }}>{headerRight}</div>}
+        </header>
+
+        {/* Content */}
+        <main style={{ flex:1, minHeight:0, overflow:"auto", padding:"12px 12px 80px" }}>{children}</main>
+
+        {/* Bottom tab bar */}
+        <nav style={{ position:"fixed", bottom:0, left:0, right:0, height:60, background:"var(--white)", borderTop:"1px solid var(--border-subtle)", display:"flex", zIndex:200, paddingBottom:"env(safe-area-inset-bottom, 0px)" }}>
+          {BOTTOM_TABS.map(tab => {
+            const isActive = tab.id === "more" ? isMoreActive || moreOpen : active === tab.id;
+            return (
+              <button key={tab.id} type="button"
+                onClick={() => tab.id === "more" ? setMoreOpen(o => !o) : handleNav(tab.id)}
+                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, border:"none", background:"none", cursor:"pointer", padding:"6px 4px" }}>
+                {tab.icon ? (
+                  <Icon name={tab.icon} size={22} style={{ color: isActive ? "var(--brand)" : "var(--text-tertiary)" }} />
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <circle cx="5" cy="11" r="2" fill={isActive ? "var(--brand)" : "var(--grey-400)"}/>
+                    <circle cx="11" cy="11" r="2" fill={isActive ? "var(--brand)" : "var(--grey-400)"}/>
+                    <circle cx="17" cy="11" r="2" fill={isActive ? "var(--brand)" : "var(--grey-400)"}/>
+                  </svg>
+                )}
+                <span style={{ font:"var(--fw-medium) 10px/1 var(--font-sans)", color: isActive ? "var(--brand)" : "var(--text-tertiary)" }}>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    );
+  }
+
+  // ── PC LAYOUT (unchanged) ────────────────────────────────────────
   return (
     <div style={{ display:"flex", height:"100%", background:"var(--surface-canvas)", fontFamily:"var(--font-sans)" }}>
-      {/* Mobile overlay backdrop */}
-      {isMobile && drawerOpen && (
-        <div onClick={() => setDrawerOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(10,17,47,0.38)', zIndex: 199 }} />
-      )}
-
-      {/* Sidebar */}
-      <aside style={sidebarStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px 24px' }}>
-          <BrandMark />
-          {isMobile && (
-            <button type="button" onClick={() => setDrawerOpen(false)}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 6 }}>
-              <Icon name="close" size={20} style={{ color: 'var(--text-secondary)' }} />
-            </button>
-          )}
-        </div>
+      <aside style={{ width:256, flex:"none", background:"var(--white)", borderRight:"1px solid var(--border-subtle)",
+        padding:"24px 16px", display:"flex", flexDirection:"column", height:"100%", boxSizing:"border-box" }}>
+        <div style={{ padding:"0 2px 24px" }}><BrandMark/></div>
         <div style={{ font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)",
           letterSpacing:"0.04em", padding:"0 12px 10px" }}>업무</div>
-        <SidebarNav value={active} onChange={(id) => { onNavigate(id); setDrawerOpen(false); }} items={NAV} />
+        <SidebarNav value={active} onChange={onNavigate} items={NAV} />
         <div style={{ marginTop:"auto", paddingTop:16, borderTop:"1px solid var(--border-subtle)" }}>
-          <SidebarNav value={active} onChange={(id) => { onNavigate(id); setDrawerOpen(false); }} items={[{ id:"settings", icon:"settings", label:"설정" }]} />
+          <SidebarNav value={active} onChange={onNavigate} items={[{ id:"settings", icon:"settings", label:"설정" }]} />
           <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 12px 4px" }}>
             <Avatar name="사무 국장" size="sm" />
             <div style={{ minWidth:0 }}>
@@ -85,40 +143,23 @@ function AppShell({ active, onNavigate, title, subtitle, headerRight, children, 
           </div>
         </div>
       </aside>
-
-      {/* Main */}
       <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, height:"100%" }}>
-        <header style={{
-          display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap: isMobile ? 8 : 24,
-          padding: isMobile ? "14px 16px" : "26px 32px 18px",
-          background:"var(--white)", borderBottom:"1px solid var(--border-subtle)", flex:"none",
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-            {isMobile && (
-              <button type="button" onClick={() => setDrawerOpen(true)}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4, display: 'flex', flex: 'none' }}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                  <path d="M3 6h16M3 11h16M3 16h16" stroke="var(--text-primary)" strokeWidth="1.8" strokeLinecap="round"/>
-                </svg>
-              </button>
-            )}
-            <div style={{ minWidth: 0 }}>
-              <h1 style={{ font: `var(--fw-bold) ${isMobile ? '18' : '26'}px/1.2 var(--font-sans)`, color:"var(--text-primary)", margin:0, letterSpacing:"-0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{title}</h1>
-              {!isMobile && subtitle && <p style={{ font:"var(--body-sm)", color:"var(--text-secondary)", margin:"6px 0 0" }}>{subtitle}</p>}
-            </div>
+        <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:24,
+          padding:"26px 32px 18px", background:"var(--white)", borderBottom:"1px solid var(--border-subtle)", flex:"none" }}>
+          <div>
+            <h1 style={{ font:"var(--fw-bold) 26px/1.2 var(--font-sans)", color:"var(--text-primary)", margin:0, letterSpacing:"-0.02em" }}>{title}</h1>
+            {subtitle && <p style={{ font:"var(--body-sm)", color:"var(--text-secondary)", margin:"6px 0 0" }}>{subtitle}</p>}
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap: isMobile ? 8 : 12, flex:"none" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, flex:"none" }}>
             {headerRight}
-            {!isMobile && (
-              <a href="모바일.html" title="모바일 화면" style={{ display:"inline-flex", alignItems:"center", gap:7, height:42, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", textDecoration:"none", whiteSpace:"nowrap" }}>
-                <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><rect x="0.7" y="0.7" width="12.6" height="16.6" rx="2.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="14" r="1" fill="currentColor"/></svg>
-                모바일
-              </a>
-            )}
-            {!isMobile && <IconButton icon="bell" variant="outline" />}
+            <a href="모바일.html" title="모바일 화면" style={{ display:"inline-flex", alignItems:"center", gap:7, height:42, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", textDecoration:"none", whiteSpace:"nowrap" }}>
+              <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><rect x="0.7" y="0.7" width="12.6" height="16.6" rx="2.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="14" r="1" fill="currentColor"/></svg>
+              모바일
+            </a>
+            <IconButton icon="bell" variant="outline" />
           </div>
         </header>
-        <main style={{ flex:1, minHeight:0, overflow:"auto", padding: isMobile ? "16px 12px 32px" : "24px 32px 40px" }}>{children}</main>
+        <main style={{ flex:1, minHeight:0, overflow:"auto", padding:"24px 32px 40px" }}>{children}</main>
       </div>
     </div>
   );
