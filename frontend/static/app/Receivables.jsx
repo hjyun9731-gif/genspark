@@ -89,6 +89,16 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [tabStats, setTabStats] = React.useState(null); // 탭 카운트 전용 (금액 필터 없음)
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false);
 
+  // 300ms 디바운스: 입력 멈춘 뒤 서버 요청
+  const [debouncedQuery, setDebouncedQuery] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // debouncedQuery 변경 시 페이지 1로 리셋
+  React.useEffect(() => { setPage(1); }, [debouncedQuery]);
+
   React.useEffect(()=>{
     if(!drill) return;
     setAmount(drill.amount || "전체");
@@ -102,32 +112,35 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
 
   // 탭 카운트 전용 조회 — 금액 필터 없이 컨텍스트 필터만 적용
   React.useEffect(()=>{
+    const ctrl = new AbortController();
     const params = new URLSearchParams();
     params.set("page", 1); params.set("size", 1);
     params.set("include_zero", "true"); params.set("include_prepaid", "true");
-    if (query.trim()) params.set("q", query.trim());
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     if (region) params.set("sigun", region);
     if (membership) params.set("membership", membership);
     if (account) params.set("member_type", account);
     if (status && status !== "전체") params.set("status", status);
-    fetch(`/api/members?${params.toString()}`)
+    fetch(`/api/members?${params.toString()}`, { signal: ctrl.signal })
       .then(r => {
         if (!r.ok) return;
         const numH = (n) => { const v = parseInt(r.headers.get(n)||"",10); return Number.isFinite(v)?v:null; };
         const ts = { totalCount:numH("X-Total-Count"), unpaidCount:numH("X-Unpaid-Count"), zeroCount:numH("X-Zero-Count"), prepaidCount:numH("X-Prepaid-Count"), over300kCount:numH("X-Over-300k") };
         r.json().catch(()=>{});
         setTabStats(ts);
-      }).catch(()=>{});
-  }, [query, region, membership, account, status]);
+      }).catch(e => { if (e.name !== "AbortError") console.warn(e); });
+    return () => ctrl.abort();
+  }, [debouncedQuery, region, membership, account, status]);
 
   // 필터/페이지 변경 시 서버 조회
   React.useEffect(()=>{
+    const ctrl = new AbortController();
     const params = new URLSearchParams();
     params.set("page", page);
     params.set("size", PAGE_SIZE);
     params.set("sort", sort.key);
     params.set("dir", sort.dir);
-    if (query.trim()) params.set("q", query.trim());
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     if (region) params.set("sigun", region);
     if (membership) params.set("membership", membership);
     if (account) params.set("member_type", account);
@@ -144,7 +157,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     if (special === "장기") params.set("min_months", "12");
 
     setServerLoading(true);
-    fetch(`/api/members?${params.toString()}`)
+    fetch(`/api/members?${params.toString()}`, { signal: ctrl.signal })
       .then(r => {
         if (!r.ok) return Promise.reject(r.status);
         const numHeader = (name) => { const n = parseInt(r.headers.get(name) || "", 10); return Number.isFinite(n) ? n : null; };
@@ -170,8 +183,9 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
         setServerTotal(m.totalCount != null ? m.totalCount : items.length);
         setServerLoading(false);
       })
-      .catch(() => { setServerLoading(false); });
-  }, [query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt, page]);
+      .catch(e => { if (e.name !== "AbortError") setServerLoading(false); });
+    return () => ctrl.abort();
+  }, [debouncedQuery, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt, page]);
 
   // 서버 결과 사용 (없으면 membersProp에서 로컬 필터)
   const rows = React.useMemo(()=>{
@@ -417,7 +431,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
           {/* 검색 + 정렬 + 다운로드 */}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <window.PMUI.SearchBox value={query} onChange={setQuery} width={360}
+              <window.PMUI.SearchBox value={query} onChange={v => { setQuery(v); setPage(1); }} width={360}
                 placeholder="이름 · 차량번호(뒤4자리) · 관리번호 · 전화번호 · 주소 검색" />
               <SortSelect sort={sort} onChange={setSort} />
             </div>

@@ -269,7 +269,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
   const open = D.openItems ? D.openItems(member) : (member.arrears||[]).filter(a=>!a.paid&&a.amount>0);
   const ledgerArrears = open.reduce((s,a)=>s+a.amount,0);
   const paidTotal = (member.payments||[]).reduce((s,p)=>s+p.amount,0);
-  const arrearsMonths = open.length;
+  const arrearsMonths = D.arrearsMonths(member);
 
   const InfoRow = ({ label, value, strong, mono }) => (
     <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid var(--border-subtle)" }}>
