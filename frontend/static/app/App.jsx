@@ -441,8 +441,9 @@ function HistoryView({ members, onCancel }){
 function SettingsView(){
   const { Card } = window.PayroleDesignSystem_9db006;
   const { FEE_ASSOC, FEE_MGMT, FEE_SENIOR, REGIONS } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24, maxWidth:980 }}>
+    <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 14 : 24, maxWidth:980, boxSizing:"border-box", width:"100%" }}>
       <Card>
         <div style={{ font:"var(--fw-demibold) 16px/1.3 var(--font-sans)", color:"var(--text-primary)", marginBottom:16 }}>부과 기준</div>
         {[["협회가입 · 협회비",won(FEE_ASSOC)+" / 월"],["협회미가입 · 관리비",won(FEE_MGMT)+" / 월"],["70세 이상 · 협회비 50% 감면",won(FEE_SENIOR)+" / 월"]].map(([l,v])=>(

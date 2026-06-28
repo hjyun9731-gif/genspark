@@ -14,10 +14,10 @@
 
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; height: 100%; overflow-x: hidden; max-width: 100vw; }
   body { font-family: var(--font-sans); background: var(--surface-canvas); color: var(--text-primary);
     -webkit-font-smoothing: antialiased; }
-  #root { height: 100vh; }
+  #root { height: 100vh; max-width: 100vw; overflow-x: hidden; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: var(--grey-200); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-thumb:hover { background: var(--grey-300); background-clip: content-box; }

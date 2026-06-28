@@ -187,7 +187,7 @@ function ClosureCard({ c, onDetail, onStatusChange, onRestore, onCancelProcess }
   const { won } = window.PMData;
   const displayType = c.type === "폐지" ? "폐업" : c.type;
   return (
-    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10 }}>
+    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10, boxSizing:"border-box", width:"100%", minWidth:0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <CTypeBadge type={displayType} />

@@ -61,21 +61,22 @@ function AppShell({ active, onNavigate, title, subtitle, headerRight, children, 
     const isMoreActive = MORE_NAV.some(n => n.id === active);
 
     return (
-      <div style={{ height:"100%", display:"flex", flexDirection:"column", fontFamily:"var(--font-sans)", background:"var(--surface-canvas)" }}>
+      <div style={{ height:"100%", display:"flex", flexDirection:"column", fontFamily:"var(--font-sans)", background:"var(--surface-canvas)", overflow:"hidden", maxWidth:"100vw" }}>
         {/* More drawer overlay */}
         {moreOpen && (
           <>
             <div onClick={() => setMoreOpen(false)}
               style={{ position:"fixed", inset:0, background:"rgba(10,17,47,0.38)", zIndex:300, backdropFilter:"blur(2px)" }} />
-            <div style={{ position:"fixed", left:0, right:0, bottom:60, zIndex:301, background:"var(--white)", borderRadius:"20px 20px 0 0", boxShadow:"0 -4px 24px rgba(0,0,0,.12)", padding:"12px 0 8px" }}>
-              <div style={{ width:36, height:4, borderRadius:2, background:"var(--grey-200)", margin:"0 auto 16px" }} />
+            <div style={{ position:"fixed", left:0, right:0, bottom:60, zIndex:301, background:"var(--white)", borderRadius:"20px 20px 0 0", boxShadow:"0 -4px 24px rgba(0,0,0,.12)", padding:"16px 0 8px", maxHeight:"70vh", overflowY:"auto" }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:"var(--grey-200)", margin:"0 auto 12px" }} />
               {MORE_NAV.map(item => (
                 <button key={item.id} type="button" onClick={() => handleNav(item.id)}
-                  style={{ display:"flex", alignItems:"center", gap:14, width:"100%", padding:"14px 24px", border:"none", background: active===item.id?"var(--brand-subtle)":"transparent", cursor:"pointer", textAlign:"left" }}>
-                  <Icon name={item.icon} size={20} style={{ color: active===item.id?"var(--brand)":"var(--text-secondary)" }} />
+                  style={{ display:"flex", alignItems:"center", gap:14, width:"100%", padding:"14px 20px", border:"none", background: active===item.id?"var(--brand-subtle)":"transparent", cursor:"pointer", textAlign:"left", boxSizing:"border-box" }}>
+                  <Icon name={item.icon} size={20} style={{ color: active===item.id?"var(--brand)":"var(--text-secondary)", flex:"none" }} />
                   <span style={{ font:"var(--fw-medium) 15px/1 var(--font-sans)", color: active===item.id?"var(--brand)":"var(--text-primary)" }}>{item.label}</span>
                 </button>
               ))}
+              <div style={{ height: "max(8px, env(safe-area-inset-bottom))" }} />
             </div>
           </>
         )}
@@ -95,7 +96,7 @@ function AppShell({ active, onNavigate, title, subtitle, headerRight, children, 
         </header>
 
         {/* Content */}
-        <main style={{ flex:1, minHeight:0, overflow:"auto", padding:"12px 12px 80px" }}>{children}</main>
+        <main style={{ flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"12px 12px 88px", width:"100%", boxSizing:"border-box" }}>{children}</main>
 
         {/* Bottom tab bar */}
         <nav style={{ position:"fixed", bottom:0, left:0, right:0, height:60, background:"var(--white)", borderTop:"1px solid var(--border-subtle)", display:"flex", zIndex:200, paddingBottom:"env(safe-area-inset-bottom, 0px)" }}>

@@ -87,6 +87,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [serverTotal, setServerTotal] = React.useState(0);
   const [serverMeta, setServerMeta] = React.useState(null);
   const [tabStats, setTabStats] = React.useState(null); // 탭 카운트 전용 (금액 필터 없음)
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false);
 
   React.useEffect(()=>{
     if(!drill) return;
@@ -147,7 +148,8 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
       .then(r => {
         if (!r.ok) return Promise.reject(r.status);
         const numHeader = (name) => { const n = parseInt(r.headers.get(name) || "", 10); return Number.isFinite(n) ? n : null; };
-        const meta = {
+        // 헤더 값을 우선 사용 (body meta보다 신뢰도 높음)
+        const headerMeta = {
           totalCount: numHeader("X-Total-Count"),
           totalBalance: numHeader("X-Total-Balance"),
           unpaidCount: numHeader("X-Unpaid-Count"),
@@ -156,9 +158,18 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
           over300kCount: numHeader("X-Over-300k"),
           over12MonthsCount: numHeader("X-Over-12Months"),
         };
-        return r.json().then(data => ({ data, meta }));
+        return r.json().then(data => ({ data, headerMeta }));
       })
-      .then(({data,meta}) => { const items = Array.isArray(data) ? data : (data.items || []); const m = data.meta || meta || {}; setServerRows(items); setServerMeta(m); setServerTotal(m.totalCount || items.length); setServerLoading(false); })
+      .then(({data, headerMeta}) => {
+        const items = Array.isArray(data) ? data : (data.items || []);
+        const bodyMeta = (!Array.isArray(data) && data.meta) ? data.meta : {};
+        // 헤더가 있으면 헤더 우선, 없으면 body meta 사용
+        const m = { ...bodyMeta, ...Object.fromEntries(Object.entries(headerMeta).filter(([,v]) => v !== null)) };
+        setServerRows(items);
+        setServerMeta(m);
+        setServerTotal(m.totalCount != null ? m.totalCount : items.length);
+        setServerLoading(false);
+      })
       .catch(() => { setServerLoading(false); });
   }, [query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt, page]);
 
@@ -274,66 +285,149 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   );
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      {/* 요약 스트립 */}
-      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,minmax(0,1fr))", gap:12 }}>
-        {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
-          ["현재 페이지 합계",won(pageSumOut),"var(--text-primary)"],
-          ["전체 조건 합계",won(sumOut),"var(--red-500)"],
-          ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
-          ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
-          <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 18px", boxShadow:"var(--shadow-xs)" }}>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
-            <div style={{ font:"var(--fw-bold) 20px/1.1 var(--font-sans)", color:c, marginTop:4 }}>{v}</div>
+    <div style={{ display:"flex", flexDirection:"column", gap:16, width:"100%", boxSizing:"border-box" }}>
+
+      {isMobile ? (
+        /* ── 모바일 레이아웃 ── */
+        <>
+          {/* 모바일 요약 — 핵심 3개만 2+1 배치 */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:10 }}>
+            {[["전체 인원", serverLoading?"조회중":num(serverTotal || rows.length)+"명", "var(--text-primary)"],
+              ["미수 합계", serverLoading?"조회중":won(sumOut), "var(--red-500)"]].map(([l,v,c])=>(
+              <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"12px 14px", boxShadow:"var(--shadow-xs)", boxSizing:"border-box", minWidth:0 }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{l}</div>
+                <div style={{ font:"var(--fw-bold) 17px/1.1 var(--font-sans)", color:c, marginTop:4, wordBreak:"keep-all" }}>{v}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:10 }}>
+            {[["30만원↑", num(over300)+"명", "var(--text-primary)"],
+              ["12개월↑ 장기", num(longCnt)+"명", "#B9791A"]].map(([l,v,c])=>(
+              <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"12px 14px", boxShadow:"var(--shadow-xs)", boxSizing:"border-box", minWidth:0 }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{l}</div>
+                <div style={{ font:"var(--fw-bold) 17px/1.1 var(--font-sans)", color:c, marginTop:4 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {serverRows !== null && rows.length < serverTotal && (
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", textAlign:"center" }}>
+              이 페이지: {num(rows.length)}명 / 전체 {num(serverTotal)}명
+            </div>
+          )}
 
-      {/* 금액 탭 */}
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-        {PAY_TABS.map(([key,label])=>(
-          <Chip key={key} active={amount===key} onClick={()=>{ setAmount(key); setPage(1); }}>{label}</Chip>
-        ))}
-      </div>
+          {/* 모바일 금액 탭 */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {PAY_TABS.map(([key,label])=>(
+              <Chip key={key} active={amount===key} onClick={()=>{ setAmount(key); setPage(1); }}>{label} {countByAmount(key)}</Chip>
+            ))}
+          </div>
 
-      {/* 필터줄 */}
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
-        <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
-        <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
-        <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
-        <DivLine/>
-        <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월 이상</Chip>
-        <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
-        <Chip active={special==="결번"} onClick={()=>setSpecial(special==="결번"?"":"결번")}>결번/반송</Chip>
-        <Chip active={special==="자격"} onClick={()=>setSpecial(special==="자격"?"":"자격")}>자격증명 미발급</Chip>
-        <Chip active={!inclZero} onClick={()=>{setInclZero(!inclZero);setPage(1);}}>0원 제외</Chip>
-        <Chip active={!inclPrepaid} onClick={()=>{setInclPrepaid(!inclPrepaid);setPage(1);}}>선납 제외</Chip>
-        <button type="button" onClick={resetFilters} style={{ marginLeft:"auto", height:36, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>초기화</button>
-      </div>
-      {/* 금액 직접 입력 필터 */}
-      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-        <span style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)" }}>현재잔액</span>
-        <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>{setMinAmt(e.target.value);setPage(1);}}
-          style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
-        <span style={{ color:"var(--text-tertiary)", fontSize:12 }}>~</span>
-        <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>{setMaxAmt(e.target.value);setPage(1);}}
-          style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
-        {(minAmt||maxAmt) && <button type="button" onClick={()=>{setMinAmt("");setMaxAmt("");}} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>금액 초기화</button>}
-      </div>
+          {/* 모바일 검색 */}
+          <window.PMUI.SearchBox value={query} onChange={v=>{setQuery(v);setPage(1);}}
+            placeholder="이름·차량번호·관리번호·전화번호 검색" style={{ width:"100%", boxSizing:"border-box" }} />
 
-      {/* 검색 + 정렬 + 다운로드 */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <window.PMUI.SearchBox value={query} onChange={setQuery} width={360}
-            placeholder="이름 · 차량번호(뒤4자리) · 관리번호 · 전화번호 · 주소 검색" />
-          <SortSelect sort={sort} onChange={setSort} />
-        </div>
-        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>전체 조건 미수 합계 <b style={{ color:"var(--red-500)" }}>{won(sumOut)}</b></span>
-          <window.PMUI.DownloadBtn onClick={exportCSV} />
-        </div>
-      </div>
+          {/* 모바일 필터 토글 */}
+          <div style={{ display:"flex", gap:8 }}>
+            <button type="button" onClick={()=>setMobileFilterOpen(f=>!f)}
+              style={{ flex:1, height:44, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-secondary)", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              <Icon name={mobileFilterOpen?"chevron-up":"filter"} size={16} />
+              {mobileFilterOpen ? "필터 닫기" : "필터 열기"}
+            </button>
+            <button type="button" onClick={exportCSV}
+              style={{ height:44, padding:"0 16px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>
+              엑셀
+            </button>
+          </div>
+
+          {/* 모바일 필터 패널 */}
+          {mobileFilterOpen && (
+            <div style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px", display:"flex", flexDirection:"column", gap:12, boxSizing:"border-box" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
+                <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
+                <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
+                <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
+              </div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월↑</Chip>
+                <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
+                <Chip active={special==="결번"} onClick={()=>setSpecial(special==="결번"?"":"결번")}>결번</Chip>
+                <Chip active={!inclZero} onClick={()=>{setInclZero(!inclZero);setPage(1);}}>0원 제외</Chip>
+                <Chip active={!inclPrepaid} onClick={()=>{setInclPrepaid(!inclPrepaid);setPage(1);}}>선납 제외</Chip>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:6, alignItems:"center" }}>
+                <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>{setMinAmt(e.target.value);setPage(1);}} style={{ width:"100%", height:40, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"16px var(--font-sans)", color:"var(--text-primary)", textAlign:"right", boxSizing:"border-box" }} />
+                <span style={{ color:"var(--text-tertiary)", textAlign:"center", fontSize:12 }}>~</span>
+                <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>{setMaxAmt(e.target.value);setPage(1);}} style={{ width:"100%", height:40, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"16px var(--font-sans)", color:"var(--text-primary)", textAlign:"right", boxSizing:"border-box" }} />
+              </div>
+              <button type="button" onClick={resetFilters} style={{ height:40, borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>초기화</button>
+            </div>
+          )}
+        </>
+      ) : (
+        /* ── PC 레이아웃 ── */
+        <>
+          {/* 요약 스트립 */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:12 }}>
+            {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
+              ["현재 페이지 합계",won(pageSumOut),"var(--text-primary)"],
+              ["전체 조건 합계",won(sumOut),"var(--red-500)"],
+              ["30만원 이상",`${num(over300)}명`,"var(--text-primary)"],
+              ["12개월 이상",`${num(longCnt)}명`,"#B9791A"]].map(([l,v,c])=>(
+              <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 18px", boxShadow:"var(--shadow-xs)" }}>
+                <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
+                <div style={{ font:"var(--fw-bold) 20px/1.1 var(--font-sans)", color:c, marginTop:4 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 금액 탭 */}
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {PAY_TABS.map(([key,label])=>(
+              <Chip key={key} active={amount===key} onClick={()=>{ setAmount(key); setPage(1); }}>{label}</Chip>
+            ))}
+          </div>
+
+          {/* 필터줄 */}
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
+            <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
+            <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
+            <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
+            <DivLine/>
+            <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월 이상</Chip>
+            <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
+            <Chip active={special==="결번"} onClick={()=>setSpecial(special==="결번"?"":"결번")}>결번/반송</Chip>
+            <Chip active={special==="자격"} onClick={()=>setSpecial(special==="자격"?"":"자격")}>자격증명 미발급</Chip>
+            <Chip active={!inclZero} onClick={()=>{setInclZero(!inclZero);setPage(1);}}>0원 제외</Chip>
+            <Chip active={!inclPrepaid} onClick={()=>{setInclPrepaid(!inclPrepaid);setPage(1);}}>선납 제외</Chip>
+            <button type="button" onClick={resetFilters} style={{ marginLeft:"auto", height:36, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)" }}>초기화</button>
+          </div>
+          {/* 금액 직접 입력 필터 */}
+          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)" }}>현재잔액</span>
+            <input type="number" placeholder="최소금액" value={minAmt} onChange={e=>{setMinAmt(e.target.value);setPage(1);}}
+              style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            <span style={{ color:"var(--text-tertiary)", fontSize:12 }}>~</span>
+            <input type="number" placeholder="최대금액" value={maxAmt} onChange={e=>{setMaxAmt(e.target.value);setPage(1);}}
+              style={{ width:110, height:34, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            {(minAmt||maxAmt) && <button type="button" onClick={()=>{setMinAmt("");setMaxAmt("");}} style={{ height:28, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", color:"var(--text-tertiary)", fontSize:12 }}>금액 초기화</button>}
+          </div>
+
+          {/* 검색 + 정렬 + 다운로드 */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <window.PMUI.SearchBox value={query} onChange={setQuery} width={360}
+                placeholder="이름 · 차량번호(뒤4자리) · 관리번호 · 전화번호 · 주소 검색" />
+              <SortSelect sort={sort} onChange={setSort} />
+            </div>
+            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+              <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>전체 조건 미수 합계 <b style={{ color:"var(--red-500)" }}>{won(sumOut)}</b></span>
+              <window.PMUI.DownloadBtn onClick={exportCSV} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* 테이블 (데스크탑) / 카드 (모바일) */}
       {isMobile ? (

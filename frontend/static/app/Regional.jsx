@@ -140,40 +140,63 @@ function TabRegional({ members, exclusionRules, onToast }) {
           <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
         </Card>
       )}
-      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:24 }}>
-            <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>대상 인원</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{filtered.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
-            <div style={{ width:1, height:34, background:"var(--border-default)" }} />
-            <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>미수금 합계</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--red-500)" }}>{won(total)}</div></div>
-            <div style={{ width:1, height:34, background:"var(--border-default)" }} />
-            <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역 수</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div></div>
+      <div style={{ display:"flex", flexDirection:"column", gap:16, minWidth:0 }}>
+        {/* 요약 카드 */}
+        {isMobile ? (
+          <div style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 16px", boxShadow:"var(--shadow-xs)", boxSizing:"border-box" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:0 }}>
+              <div style={{ textAlign:"center", padding:"0 8px" }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>대상 인원</div>
+                <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:"var(--text-primary)", wordBreak:"keep-all" }}>{filtered.length}<span style={{ fontSize:12, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div>
+              </div>
+              <div style={{ textAlign:"center", padding:"0 8px", borderLeft:"1px solid var(--border-subtle)", borderRight:"1px solid var(--border-subtle)" }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>미수금 합계</div>
+                <div style={{ font:"var(--fw-bold) 15px/1.1 var(--font-sans)", color:"var(--red-500)", wordBreak:"keep-all" }}>{won(total)}</div>
+              </div>
+              <div style={{ textAlign:"center", padding:"0 8px" }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>지역 수</div>
+                <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:12, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div>
+              </div>
+            </div>
+            <button type="button" onClick={exportCSV} style={{ marginTop:12, width:"100%", height:42, border:"none", borderRadius:"var(--radius-md)", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 14px/1 var(--font-sans)", cursor:"pointer", boxSizing:"border-box" }}>
+              지역별 엑셀 다운로드
+            </button>
           </div>
-          <window.PMUI.DownloadBtn onClick={exportCSV} label="지역별 엑셀 다운로드" />
-        </div>
+        ) : (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:24 }}>
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>대상 인원</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{filtered.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
+              <div style={{ width:1, height:34, background:"var(--border-default)" }} />
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>미수금 합계</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--red-500)" }}>{won(total)}</div></div>
+              <div style={{ width:1, height:34, background:"var(--border-default)" }} />
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역 수</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div></div>
+            </div>
+            <window.PMUI.DownloadBtn onClick={exportCSV} label="지역별 엑셀 다운로드" />
+          </div>
+        )}
         {groups.map(g => {
           const sub = g.rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
           return (
             <Card key={g.region} padded={false}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", borderTopLeftRadius:"var(--radius-lg)", borderTopRightRadius:"var(--radius-lg)" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--brand)" }} />
-                  <span style={{ font:"var(--fw-demibold) 15px/1 var(--font-sans)", color:"var(--text-primary)" }}>{g.region}</span>
-                  <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>· {g.rows.length}명</span>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", borderTopLeftRadius:"var(--radius-lg)", borderTopRightRadius:"var(--radius-lg)" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--brand)", flex:"none" }} />
+                  <span style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.region}</span>
+                  <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>· {g.rows.length}명</span>
                 </div>
-                <span style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>소계 {won(sub)}</span>
+                <span style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", flex:"none", wordBreak:"keep-all", marginLeft:8 }}>소계 {won(sub)}</span>
               </div>
               {isMobile ? (
-                <div style={{ padding:"8px 16px" }}>
+                <div style={{ padding:"8px 14px" }}>
                   {g.rows.map(m => {
                     const out = D.outstanding(m);
                     return (
-                      <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)" }}>
-                        <div>
-                          <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</div>
+                      <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)", minWidth:0 }}>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}</div>
                           <div style={{ font:"var(--body-xs)", color:"var(--text-secondary)", marginTop:2 }}>{m.vehicleNo||m.vehicle_no} · {m.phone||"전화없음"}</div>
                         </div>
-                        <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:out>0?"var(--red-500)":"var(--text-tertiary)", textAlign:"right", alignSelf:"center" }}>{won(out)}</div>
+                        <div style={{ font:"var(--fw-bold) 13px/1 var(--font-sans)", color:out>0?"var(--red-500)":"var(--text-tertiary)", textAlign:"right", alignSelf:"center", flex:"none", marginLeft:12, wordBreak:"keep-all" }}>{won(out)}</div>
                       </div>
                     );
                   })}
@@ -305,39 +328,58 @@ function TabSms({ members, exclusionRules, onToast }) {
           <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
         </Card>
       )}
-      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:24 }}>
-            <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>문자 대상</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{filtered.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
-            <div style={{ width:1, height:34, background:"var(--border-default)" }} />
-            <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역 수</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div></div>
+      <div style={{ display:"flex", flexDirection:"column", gap:16, minWidth:0 }}>
+        {/* 요약 카드 */}
+        {isMobile ? (
+          <div style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 16px", boxShadow:"var(--shadow-xs)", boxSizing:"border-box" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:0 }}>
+              <div style={{ textAlign:"center", padding:"0 8px" }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>문자 대상</div>
+                <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:"var(--text-primary)", wordBreak:"keep-all" }}>{filtered.length}<span style={{ fontSize:12, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div>
+              </div>
+              <div style={{ textAlign:"center", padding:"0 8px", borderLeft:"1px solid var(--border-subtle)" }}>
+                <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>지역 수</div>
+                <div style={{ font:"var(--fw-bold) 18px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:12, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div>
+              </div>
+            </div>
+            <button type="button" onClick={exportCSV} style={{ marginTop:12, width:"100%", height:42, border:"none", borderRadius:"var(--radius-md)", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 14px/1 var(--font-sans)", cursor:"pointer", boxSizing:"border-box" }}>
+              문자 대상 엑셀 다운로드
+            </button>
           </div>
-          <window.PMUI.DownloadBtn onClick={exportCSV} label="문자 대상 엑셀" />
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", background:"var(--brand-subtle)", borderRadius:"var(--radius-md)" }}>
-          <Icon name="mail" size={18} color="var(--brand)" />
-          <span style={{ font:"var(--body-sm)", color:"var(--brand-active)" }}>전화번호·미수금 기준으로 문자 발송 대상을 추출합니다. 엑셀에 문자 문구 복사용 데이터가 함께 출력됩니다.</span>
+        ) : (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:24 }}>
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>문자 대상</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{filtered.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>명</span></div></div>
+              <div style={{ width:1, height:34, background:"var(--border-default)" }} />
+              <div><div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>지역 수</div><div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:"var(--text-primary)" }}>{groups.length}<span style={{ fontSize:14, color:"var(--text-tertiary)", fontWeight:500 }}>개</span></div></div>
+            </div>
+            <window.PMUI.DownloadBtn onClick={exportCSV} label="문자 대상 엑셀" />
+          </div>
+        )}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px", background:"var(--brand-subtle)", borderRadius:"var(--radius-md)", boxSizing:"border-box" }}>
+          <Icon name="mail" size={16} color="var(--brand)" />
+          <span style={{ font:"var(--body-sm)", color:"var(--brand-active)", wordBreak:"keep-all" }}>전화번호·미수금 기준으로 문자 발송 대상을 추출합니다. 엑셀에 문자 문구가 함께 출력됩니다.</span>
         </div>
         {groups.map(g => (
           <Card key={g.region} padded={false}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", borderTopLeftRadius:"var(--radius-lg)", borderTopRightRadius:"var(--radius-lg)" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--brand)" }} />
-                <span style={{ font:"var(--fw-demibold) 15px/1 var(--font-sans)", color:"var(--text-primary)" }}>{g.region}</span>
-                <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)" }}>· {g.rows.length}명</span>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1px solid var(--border-subtle)", background:"var(--grey-25)", borderTopLeftRadius:"var(--radius-lg)", borderTopRightRadius:"var(--radius-lg)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--brand)", flex:"none" }} />
+                <span style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.region}</span>
+                <span style={{ font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>· {g.rows.length}명</span>
               </div>
             </div>
             {isMobile ? (
-              <div style={{ padding:"8px 16px" }}>
+              <div style={{ padding:"8px 14px" }}>
                 {g.rows.map(m => {
                   const out = D.outstanding(m);
                   return (
-                    <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)" }}>
-                      <div>
-                        <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</div>
+                    <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border-subtle)", minWidth:0 }}>
+                      <div style={{ minWidth:0, flex:1 }}>
+                        <div style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.name}{m.isSenior&&<span style={{marginLeft:6,fontSize:10,color:"var(--green-500)",fontWeight:700}}>70세</span>}</div>
                         <div style={{ font:"var(--body-xs)", color:"var(--text-secondary)", marginTop:2 }}>{m.vehicleNo||m.vehicle_no} · {m.phone||"전화없음"}</div>
                       </div>
-                      <div style={{ font:"var(--fw-bold) 14px/1 var(--font-sans)", color:"var(--red-500)", textAlign:"right", alignSelf:"center" }}>{won(out)}</div>
+                      <div style={{ font:"var(--fw-bold) 13px/1 var(--font-sans)", color:"var(--red-500)", textAlign:"right", alignSelf:"center", flex:"none", marginLeft:12, wordBreak:"keep-all" }}>{won(out)}</div>
                     </div>
                   );
                 })}

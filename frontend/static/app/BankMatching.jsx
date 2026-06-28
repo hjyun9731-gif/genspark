@@ -36,31 +36,33 @@ function IncomeActions({ onPick }){
 }
 
 function DepositCard({ d, onMatch, onExclude, onManual, won }) {
-  const style = BANK_STATUS_STYLE[d._displayStatus || d.status] || {};
+  const statusKey = d._displayStatus || d.status;
+  const style = BANK_STATUS_STYLE[statusKey] || BANK_STATUS_STYLE["미매칭"];
   const best = d.candidates && d.candidates[0];
   const group = d.groupCandidates && d.groupCandidates[0];
-  const done = ["매칭완료","제외"].includes(d.status);
+  const done = ["매칭완료","반영완료","제외"].includes(d.status);
+  const pending = !done;
   return (
-    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{d.depositorName || d.depositor_name || '—'}</span>
-        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--brand)' }}>{won(d.amount || 0)}</span>
+    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10, boxSizing:"border-box", width:"100%", minWidth:0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, minWidth:0 }}>
+        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)', overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0 }}>{d.depositorName || d.depositor_name || '—'}</span>
+        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--brand)', flex:"none", marginLeft:10, wordBreak:"keep-all" }}>{won(d.amount || 0)}</span>
       </div>
-      <div style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', marginBottom: 8 }}>{d.depositDate || d.tx_date} · {d.memo || d.note || '—'}</div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: done ? 0 : 10 }}>
-        <span style={{ padding: '3px 10px', borderRadius: 99, background: style.bg || 'var(--grey-50)', color: style.fg || 'var(--text-secondary)', font: 'var(--fw-medium) 11px/1 var(--font-sans)' }}>{d.status}</span>
-        {(group || best) && <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)' }}>→ {group ? group.title : best.name}</span>}
+      <div style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', marginBottom: 8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.depositDate || d.tx_date} · {d.memo || d.note || '—'}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: pending ? 10 : 0 }}>
+        <span style={{ padding: '3px 10px', borderRadius: 99, background: style.bg, color: style.fg, font: 'var(--fw-medium) 11px/1 var(--font-sans)', whiteSpace:"nowrap" }}>{d.status}</span>
+        {(group || best) && <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>→ {group ? group.title : best.name}</span>}
       </div>
-      {!done && (
+      {pending && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {group
-            ? <button type="button" onClick={() => onMatch && onMatch(d, group, true)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--violet-500)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>묶음반영</button>
-            : <button type="button" disabled={!best} onClick={() => onMatch && onMatch(d, best, false)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:best?"pointer":"default", background:best?"var(--green-500)":"var(--grey-100)", color:best?"#fff":"var(--text-muted)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>반영</button>}
-          <button type="button" onClick={() => onManual && onManual(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>수동</button>
-          <button type="button" onClick={() => onExclude && onExclude(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>제외</button>
+            ? <button type="button" onClick={() => onMatch && onMatch(d, group, true)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--violet-500)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>묶음반영</button>
+            : <button type="button" disabled={!best} onClick={() => onMatch && onMatch(d, best, false)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:best?"pointer":"default", background:best?"var(--green-500)":"var(--grey-100)", color:best?"#fff":"var(--text-muted)", font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>반영</button>}
+          <button type="button" onClick={() => onManual && onManual(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>수동</button>
+          <button type="button" onClick={() => onExclude && onExclude(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)", whiteSpace:"nowrap" }}>제외</button>
         </div>
       )}
-      {done && <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리완료</span>}
+      {done && <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리완료 ({d.status})</span>}
     </div>
   );
 }
@@ -102,40 +104,53 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
   );
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:16, width:"100%", boxSizing:"border-box" }}>
       {/* 요약 */}
-      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(5,minmax(0,1fr))", gap:10 }}>
         {[["전체 거래",summary.total,"var(--text-primary)","업로드 원본"],
           ["자동매칭",summary.auto,"var(--green-500)","바로 반영 후보"],
           ["확인 필요",summary.confirm,"#B9791A","후보확인/중복"],
           ["미매칭",summary.unmatched,"var(--red-500)","수동검색 필요"],
           ["완료/제외",summary.done,"var(--text-secondary)","처리 끝"]].map(([l,v,c,s])=>(
-          <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"14px 16px", boxShadow:"var(--shadow-xs)" }}>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{l}</div>
-            <div style={{ font:"var(--fw-bold) 22px/1.1 var(--font-sans)", color:c, marginTop:6 }}>{num(v)}<span style={{ fontSize:13, color:"var(--text-tertiary)", fontWeight:500 }}>건</span></div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:4 }}>{s}</div>
+          <div key={l} style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding: isMobile?"12px 14px":"14px 16px", boxShadow:"var(--shadow-xs)", minWidth:0, boxSizing:"border-box" }}>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", wordBreak:"keep-all" }}>{l}</div>
+            <div style={{ font:`var(--fw-bold) ${isMobile?"18":"22"}px/1.1 var(--font-sans)`, color:c, marginTop:6, wordBreak:"keep-all" }}>{num(v)}<span style={{ fontSize:12, color:"var(--text-tertiary)", fontWeight:500 }}>건</span></div>
+            {!isMobile && <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:4 }}>{s}</div>}
           </div>
         ))}
       </div>
 
       {/* 필터 + 액션 */}
-      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-        <window.PMUI.SearchBox value={q} onChange={setQ} width={340} placeholder="입금자명 · 거래기록 · 회원명 · 차량번호 검색" />
-        <select value={status} onChange={e=>setStatus(e.target.value)} style={{ appearance:"none", height:42, padding:"0 32px 0 14px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-primary)", backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")", backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" }}>
-          {["전체","처리대기","자동매칭","확인필요","미매칭","매칭완료","제외"].map(s=><option key={s}>{s}</option>)}
-        </select>
-        <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-          <button type="button" onClick={()=>setPaste(true)}
-            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-            <Icon name="notes" size={14} style={{ color:"#fff" }} />붙여넣기 입력</button>
-          <button type="button" onClick={autoAll}
-            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-            <Icon name="check" size={14} style={{ color:"var(--text-tertiary)" }} />자동매칭 전체 반영</button>
-          <div style={{ width:1, height:20, background:"var(--border-default)" }} />
-          <button type="button" onClick={()=>{ if(confirm("미처리 입금 내역을 삭제합니다.\n매칭완료·반영완료·제외 처리된 건은 유지됩니다.\n계속하시겠습니까?")) onReset(); }}
-            style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>미처리 내역 삭제</button>
+      {isMobile ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <window.PMUI.SearchBox value={q} onChange={setQ} placeholder="입금자명·회원명·차량번호 검색" style={{ width:"100%", boxSizing:"border-box" }} />
+          <div style={{ display:"flex", gap:8 }}>
+            <select value={status} onChange={e=>setStatus(e.target.value)} style={{ flex:1, height:42, padding:"0 12px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", boxSizing:"border-box", minWidth:0 }}>
+              {["전체","처리대기","자동매칭","확인필요","미매칭","매칭완료","제외"].map(s=><option key={s}>{s}</option>)}
+            </select>
+            <button type="button" onClick={()=>setPaste(true)} style={{ height:42, padding:"0 14px", borderRadius:"var(--radius-md)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>붙여넣기</button>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button type="button" onClick={autoAll} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>자동매칭 전체 반영</button>
+            <button type="button" onClick={()=>{ if(confirm("미처리 입금 내역을 삭제합니다.\n매칭완료·반영완료·제외 처리된 건은 유지됩니다.\n계속하시겠습니까?")) onReset(); }} style={{ flex:1, height:42, borderRadius:"var(--radius-md)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>미처리 삭제</button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+          <window.PMUI.SearchBox value={q} onChange={setQ} width={340} placeholder="입금자명 · 거래기록 · 회원명 · 차량번호 검색" />
+          <select value={status} onChange={e=>setStatus(e.target.value)} style={{ appearance:"none", height:42, padding:"0 32px 0 14px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-primary)", backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")", backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" }}>
+            {["전체","처리대기","자동매칭","확인필요","미매칭","매칭완료","제외"].map(s=><option key={s}>{s}</option>)}
+          </select>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+            <button type="button" onClick={()=>setPaste(true)} style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+              <Icon name="notes" size={14} style={{ color:"#fff" }} />붙여넣기 입력</button>
+            <button type="button" onClick={autoAll} style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 13px/1 var(--font-sans)", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+              <Icon name="check" size={14} style={{ color:"var(--text-tertiary)" }} />자동매칭 전체 반영</button>
+            <div style={{ width:1, height:20, background:"var(--border-default)" }} />
+            <button type="button" onClick={()=>{ if(confirm("미처리 입금 내역을 삭제합니다.\n매칭완료·반영완료·제외 처리된 건은 유지됩니다.\n계속하시겠습니까?")) onReset(); }} style={{ height:38, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid #FECACA", background:"var(--white)", color:"var(--red-500)", cursor:"pointer", font:"var(--fw-demibold) 13px/1 var(--font-sans)", whiteSpace:"nowrap" }}>미처리 내역 삭제</button>
+          </div>
+        </div>
+      )}
 
       {/* 테이블 (데스크탑) / 카드 (모바일) */}
       {isMobile ? (
