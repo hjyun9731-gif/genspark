@@ -37,7 +37,7 @@ class Member(Base):
     __tablename__ = "misu_members"
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True)        # 'M00001'
-    mgmt_no: Mapped[str] = mapped_column(String(16), unique=True, index=True)  # 관리번호
+    mgmt_no: Mapped[str | None] = mapped_column(String(16), unique=True, index=True, nullable=True)  # 관리번호 (원본 없으면 NULL)
     reg_type: Mapped[str] = mapped_column(String(8))                     # 등록구분: 신규/양도양수
     name: Mapped[str] = mapped_column(String(40), index=True)            # 이름
     vehicle_no: Mapped[str] = mapped_column(String(20), index=True)      # 차량번호

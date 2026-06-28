@@ -323,9 +323,9 @@ def _current_max_member_no(db: Session) -> int:
     return max_no
 
 
-def _make_mgmt_no(raw: str, fallback_no: int) -> str:
+def _make_mgmt_no(raw: str) -> str | None:
     s = _clean(raw)
-    return (s or f"관리번호미상-{fallback_no:03d}")[:16]
+    return s[:16] if s else None
 
 
 def _read_workbook(file_bytes: bytes):
@@ -747,18 +747,19 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
                 while _next_member_id_from_no(next_no) in used_ids:
                     next_no += 1
                 mid = _next_member_id_from_no(next_no)
-                raw_mgmt = _make_mgmt_no(row.get("관리번호", ""), next_no)
+                raw_mgmt = _make_mgmt_no(row.get("관리번호", ""))
                 mgmt = raw_mgmt
-                suffix = 2
-                while mgmt in used_mgmt:
-                    tail = f"-{suffix}"
-                    mgmt = f"{raw_mgmt[:16-len(tail)]}{tail}"
-                    suffix += 1
-                used_mgmt.add(mgmt)
+                if mgmt:
+                    suffix = 2
+                    while mgmt in used_mgmt:
+                        tail = f"-{suffix}"
+                        mgmt = f"{raw_mgmt[:16-len(tail)]}{tail}"
+                        suffix += 1
+                    used_mgmt.add(mgmt)
                 m = Member(
                     id=mid,
                     mgmt_no=mgmt,
-                    reg_type="양도양수" if mgmt.startswith("양") else "신규",
+                    reg_type="양도양수" if (mgmt and mgmt.startswith("양")) else "신규",
                     name=name,
                     vehicle_no=vehicle,
                     phone=_clip(row.get("핸드폰") or row.get("전화번호"), 20),

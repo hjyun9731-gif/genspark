@@ -278,9 +278,9 @@ def promote_pending(pending_id: int, payload: PromotePayload | None = None, db: 
     charge_item = payload.charge_item or payload.chargeItem or _charge_item(membership)
     monthly_charge = payload.monthly_charge or payload.monthlyCharge or _monthly_charge(membership)
     billing_start_ym = payload.billing_start_ym or payload.billingStartYm or _billing_start_date(cert_date).strftime("%Y-%m")
-    mgmt_no = payload.mgmt_no or payload.mgmtNo or p.mgmt_no or _next_mgmt_no(db)
+    mgmt_no = payload.mgmt_no or payload.mgmtNo or p.mgmt_no or None
 
-    if db.scalar(select(Member).where(Member.mgmt_no == mgmt_no)):
+    if mgmt_no and db.scalar(select(Member).where(Member.mgmt_no == mgmt_no)):
         raise HTTPException(status_code=400, detail="이미 사용 중인 관리번호입니다.")
 
     member = Member(

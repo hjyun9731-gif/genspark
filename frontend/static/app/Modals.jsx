@@ -490,7 +490,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
                 {member.isSenior && <span style={{ font:"10px/1 var(--font-sans)", color:"var(--green-500)", fontWeight:700, padding:"2px 6px", background:"#EAF7F0", borderRadius:5 }}>70세</span>}
                 <window.PMUI.MemberStatusChip status={member.status} />
               </div>
-              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:2 }}>{member.mgmtNo||member.mgmt_no} · {member.sigun} · {member.vehicleNo||member.vehicle_no}</div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:2 }}>{(member.mgmtNo||member.mgmt_no)||"관리번호없음"} · {member.sigun} · {member.vehicleNo||member.vehicle_no}</div>
             </div>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
