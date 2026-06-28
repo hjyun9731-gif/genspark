@@ -1,5 +1,5 @@
 // 앱 셸 — 좌측 사이드바 + 상단 헤더. 디자인 시스템 프리미티브로 구성.
-const { SidebarNav, IconButton, Avatar } = window.PayroleDesignSystem_9db006;
+const { SidebarNav, IconButton, Avatar, Icon } = window.PayroleDesignSystem_9db006;
 
 const NAV = [
   { id: "dashboard", icon: "home",        label: "대시보드" },
@@ -35,17 +35,47 @@ function BrandMark(){
 }
 
 function AppShell({ active, onNavigate, title, subtitle, headerRight, children, density }){
+  const isMobile = window.useMobile ? window.useMobile() : false;
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  // On mobile: sidebar becomes a drawer overlay
+  const sidebarStyle = isMobile ? {
+    position: 'fixed', top: 0, left: drawerOpen ? 0 : -280, width: 256, height: '100%',
+    background: 'var(--white)', borderRight: '1px solid var(--border-subtle)',
+    padding: '24px 16px', display: 'flex', flexDirection: 'column',
+    boxSizing: 'border-box', zIndex: 200, transition: 'left .22s ease',
+    overflowY: 'auto',
+  } : {
+    width: 256, flex: 'none', background: 'var(--white)',
+    borderRight: '1px solid var(--border-subtle)',
+    padding: '24px 16px', display: 'flex', flexDirection: 'column',
+    height: '100%', boxSizing: 'border-box',
+  };
+
   return (
     <div style={{ display:"flex", height:"100%", background:"var(--surface-canvas)", fontFamily:"var(--font-sans)" }}>
+      {/* Mobile overlay backdrop */}
+      {isMobile && drawerOpen && (
+        <div onClick={() => setDrawerOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(10,17,47,0.38)', zIndex: 199 }} />
+      )}
+
       {/* Sidebar */}
-      <aside style={{ width:256, flex:"none", background:"var(--white)", borderRight:"1px solid var(--border-subtle)",
-        padding:"24px 16px", display:"flex", flexDirection:"column", height:"100%", boxSizing:"border-box" }}>
-        <div style={{ padding:"0 2px 24px" }}><BrandMark/></div>
+      <aside style={sidebarStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px 24px' }}>
+          <BrandMark />
+          {isMobile && (
+            <button type="button" onClick={() => setDrawerOpen(false)}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 6 }}>
+              <Icon name="close" size={20} style={{ color: 'var(--text-secondary)' }} />
+            </button>
+          )}
+        </div>
         <div style={{ font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)",
           letterSpacing:"0.04em", padding:"0 12px 10px" }}>업무</div>
-        <SidebarNav value={active} onChange={onNavigate} items={NAV} />
+        <SidebarNav value={active} onChange={(id) => { onNavigate(id); setDrawerOpen(false); }} items={NAV} />
         <div style={{ marginTop:"auto", paddingTop:16, borderTop:"1px solid var(--border-subtle)" }}>
-          <SidebarNav value={active} onChange={onNavigate} items={[{ id:"settings", icon:"settings", label:"설정" }]} />
+          <SidebarNav value={active} onChange={(id) => { onNavigate(id); setDrawerOpen(false); }} items={[{ id:"settings", icon:"settings", label:"설정" }]} />
           <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 12px 4px" }}>
             <Avatar name="사무 국장" size="sm" />
             <div style={{ minWidth:0 }}>
@@ -58,22 +88,37 @@ function AppShell({ active, onNavigate, title, subtitle, headerRight, children, 
 
       {/* Main */}
       <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, height:"100%" }}>
-        <header style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:24,
-          padding:"26px 32px 18px", background:"var(--white)", borderBottom:"1px solid var(--border-subtle)", flex:"none" }}>
-          <div>
-            <h1 style={{ font:"var(--fw-bold) 26px/1.2 var(--font-sans)", color:"var(--text-primary)", margin:0, letterSpacing:"-0.02em" }}>{title}</h1>
-            {subtitle && <p style={{ font:"var(--body-sm)", color:"var(--text-secondary)", margin:"6px 0 0" }}>{subtitle}</p>}
+        <header style={{
+          display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap: isMobile ? 8 : 24,
+          padding: isMobile ? "14px 16px" : "26px 32px 18px",
+          background:"var(--white)", borderBottom:"1px solid var(--border-subtle)", flex:"none",
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+            {isMobile && (
+              <button type="button" onClick={() => setDrawerOpen(true)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4, display: 'flex', flex: 'none' }}>
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                  <path d="M3 6h16M3 11h16M3 16h16" stroke="var(--text-primary)" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ font: `var(--fw-bold) ${isMobile ? '18' : '26'}px/1.2 var(--font-sans)`, color:"var(--text-primary)", margin:0, letterSpacing:"-0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{title}</h1>
+              {!isMobile && subtitle && <p style={{ font:"var(--body-sm)", color:"var(--text-secondary)", margin:"6px 0 0" }}>{subtitle}</p>}
+            </div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:12, flex:"none" }}>
+          <div style={{ display:"flex", alignItems:"center", gap: isMobile ? 8 : 12, flex:"none" }}>
             {headerRight}
-            <a href="모바일.html" title="모바일 화면" style={{ display:"inline-flex", alignItems:"center", gap:7, height:42, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", textDecoration:"none", whiteSpace:"nowrap" }}>
-              <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><rect x="0.7" y="0.7" width="12.6" height="16.6" rx="2.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="14" r="1" fill="currentColor"/></svg>
-              모바일
-            </a>
-            <IconButton icon="bell" variant="outline" />
+            {!isMobile && (
+              <a href="모바일.html" title="모바일 화면" style={{ display:"inline-flex", alignItems:"center", gap:7, height:42, padding:"0 14px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 13px/1 var(--font-sans)", textDecoration:"none", whiteSpace:"nowrap" }}>
+                <svg width="14" height="18" viewBox="0 0 14 18" fill="none"><rect x="0.7" y="0.7" width="12.6" height="16.6" rx="2.5" stroke="currentColor" strokeWidth="1.4"/><circle cx="7" cy="14" r="1" fill="currentColor"/></svg>
+                모바일
+              </a>
+            )}
+            {!isMobile && <IconButton icon="bell" variant="outline" />}
           </div>
         </header>
-        <main style={{ flex:1, minHeight:0, overflow:"auto", padding:"24px 32px 40px" }}>{children}</main>
+        <main style={{ flex:1, minHeight:0, overflow:"auto", padding: isMobile ? "16px 12px 32px" : "24px 32px 40px" }}>{children}</main>
       </div>
     </div>
   );

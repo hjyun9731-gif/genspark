@@ -35,8 +35,39 @@ function IncomeActions({ onPick }){
   );
 }
 
+function DepositCard({ d, onMatch, onExclude, onManual, won }) {
+  const style = BANK_STATUS_STYLE[d._displayStatus || d.status] || {};
+  const best = d.candidates && d.candidates[0];
+  const group = d.groupCandidates && d.groupCandidates[0];
+  const done = ["매칭완료","제외"].includes(d.status);
+  return (
+    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{d.depositorName || d.depositor_name || '—'}</span>
+        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--brand)' }}>{won(d.amount || 0)}</span>
+      </div>
+      <div style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', marginBottom: 8 }}>{d.depositDate || d.tx_date} · {d.memo || d.note || '—'}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: done ? 0 : 10 }}>
+        <span style={{ padding: '3px 10px', borderRadius: 99, background: style.bg || 'var(--grey-50)', color: style.fg || 'var(--text-secondary)', font: 'var(--fw-medium) 11px/1 var(--font-sans)' }}>{d.status}</span>
+        {(group || best) && <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)' }}>→ {group ? group.title : best.name}</span>}
+      </div>
+      {!done && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {group
+            ? <button type="button" onClick={() => onMatch && onMatch(d, group, true)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--violet-500)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>묶음반영</button>
+            : <button type="button" disabled={!best} onClick={() => onMatch && onMatch(d, best, false)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:best?"pointer":"default", background:best?"var(--green-500)":"var(--grey-100)", color:best?"#fff":"var(--text-muted)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>반영</button>}
+          <button type="button" onClick={() => onManual && onManual(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>수동</button>
+          <button type="button" onClick={() => onExclude && onExclude(d)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>제외</button>
+        </div>
+      )}
+      {done && <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리완료</span>}
+    </div>
+  );
+}
+
 function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onReset, onPaste, onToast }){
   const D = window.PMData; const { won, num } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("전체");
   const [modal, setModal] = React.useState(null);
@@ -73,7 +104,7 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* 요약 */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,1fr)", gap:12 }}>
         {[["전체 거래",summary.total,"var(--text-primary)","업로드 원본"],
           ["자동매칭",summary.auto,"var(--green-500)","바로 반영 후보"],
           ["확인 필요",summary.confirm,"#B9791A","후보확인/중복"],
@@ -106,60 +137,76 @@ function BankMatching({ deposits, members, onMatch, onGroupMatch, onExclude, onR
         </div>
       </div>
 
-      {/* 테이블 */}
-      <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
-        <div style={{ maxHeight:"calc(100vh - 400px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1080 }}>
-            <thead><tr>
-              <Th label="거래일자" /><Th label="입금자명" /><Th label="거래기록사항" /><Th label="입금액" align="right" />
-              <Th label="상태" /><Th label="추천회원" /><Th label="차량번호" /><Th label="현재미수 / 차액" align="right" /><Th label="처리" align="right" />
-            </tr></thead>
-            <tbody>
-              {rows.map(d=>{
-                const group = d.groupCandidates && d.groupCandidates[0];
-                const best = d.candidates && d.candidates[0];
-                const done = ["매칭완료","제외"].includes(d.status);
-                const arrears = group ? group.expectedAmount : best ? best.totalArrears : 0;
-                const diff = group ? group.diff : best ? (d.amount - arrears) : null;
-                return (
-                  <tr key={d.id} style={{ borderBottom:"1px solid var(--border-subtle)", opacity:done?0.6:1 }}>
-                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{d.depositDate}</td>
-                    <td style={{ padding:"9px 12px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{d.depositorName}</td>
-                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.memo}>{d.memo || d.description}</td>
-                    <td style={{ padding:"9px 12px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(d.amount)}</td>
-                    <td style={{ padding:"9px 12px" }}>
-                      <BankStatusBadge status={d.status} />
-                      {group && <div style={{ display:"inline-flex", marginLeft:6, padding:"3px 8px", borderRadius:"var(--radius-pill)", background:"#EFEEFD", color:"var(--violet-500)", font:"var(--fw-demibold) 11px/1 var(--font-sans)" }}>묶음</div>}
-                      {!group && d.candidates && d.candidates.length>1 && <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)", marginTop:3 }}>후보 {d.candidates.length}명</div>}
-                    </td>
-                    <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
-                      {group ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{group.title}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>묶음 {group.resolvedCount}/{group.targetCount}명 · 대납</div></span>
-                        : best ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{best.name}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{best.mgmtNo}</div></span>
-                        : <span style={{ font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>수동매칭 필요</span>}
-                    </td>
-                    <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{group ? "대납자 묶음" : best?.vehicleNo || "—"}</td>
-                    <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
-                      {(group||best) ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{won(arrears)}</b><div style={{ font:"10px/1.4 var(--font-sans)", color: diff===0?"var(--green-500)":"var(--text-tertiary)" }}>{diffText(diff)}</div></span> : "—"}
-                    </td>
-                    <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
-                      {!done ? (
-                        <div style={{ display:"inline-flex", gap:6 }}>
-                          {group
-                            ? <button type="button" onClick={()=>{ onGroupMatch(d, group); onToast(`${group.title} ${won(d.amount)} 묶음수납 반영`); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--violet-500)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>묶음반영</button>
-                            : <button type="button" disabled={!best} onClick={()=>{ onMatch(d, best); onToast(`${best.name} 님 ${won(d.amount)} 수납 반영`); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:best?"pointer":"default", background:best?"var(--green-500)":"var(--grey-100)", color:best?"#fff":"var(--text-muted)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>반영</button>}
-                          <button type="button" onClick={()=>setModal(d)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>{(group||best)?"후보":"수동"}</button>
-                          <button type="button" onClick={()=>onExclude(d)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>제외</button>
-                        </div>
-                      ) : <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리완료</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length===0 && <tr><td colSpan={9} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>매칭할 거래내역이 없습니다.</td></tr>}
-            </tbody>
-          </table>
+      {/* 테이블 (데스크탑) / 카드 (모바일) */}
+      {isMobile ? (
+        <div>
+          {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>매칭할 거래내역이 없습니다.</div>}
+          {rows.map(d => (
+            <DepositCard key={d.id} d={d} won={won}
+              onMatch={(dep, cand, isGroup) => {
+                if (isGroup) { onGroupMatch(dep, cand); onToast(`${cand.title} ${won(dep.amount)} 묶음수납 반영`); }
+                else { onMatch(dep, cand); onToast(`${cand.name} 님 ${won(dep.amount)} 수납 반영`); }
+              }}
+              onExclude={onExclude}
+              onManual={(dep) => setModal(dep)}
+            />
+          ))}
         </div>
-      </div>
+      ) : (
+        <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
+          <div style={{ maxHeight:"calc(100vh - 400px)", overflow:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1080 }}>
+              <thead><tr>
+                <Th label="거래일자" /><Th label="입금자명" /><Th label="거래기록사항" /><Th label="입금액" align="right" />
+                <Th label="상태" /><Th label="추천회원" /><Th label="차량번호" /><Th label="현재미수 / 차액" align="right" /><Th label="처리" align="right" />
+              </tr></thead>
+              <tbody>
+                {rows.map(d=>{
+                  const group = d.groupCandidates && d.groupCandidates[0];
+                  const best = d.candidates && d.candidates[0];
+                  const done = ["매칭완료","제외"].includes(d.status);
+                  const arrears = group ? group.expectedAmount : best ? best.totalArrears : 0;
+                  const diff = group ? group.diff : best ? (d.amount - arrears) : null;
+                  return (
+                    <tr key={d.id} style={{ borderBottom:"1px solid var(--border-subtle)", opacity:done?0.6:1 }}>
+                      <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{d.depositDate}</td>
+                      <td style={{ padding:"9px 12px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{d.depositorName}</td>
+                      <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.memo}>{d.memo || d.description}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(d.amount)}</td>
+                      <td style={{ padding:"9px 12px" }}>
+                        <BankStatusBadge status={d.status} />
+                        {group && <div style={{ display:"inline-flex", marginLeft:6, padding:"3px 8px", borderRadius:"var(--radius-pill)", background:"#EFEEFD", color:"var(--violet-500)", font:"var(--fw-demibold) 11px/1 var(--font-sans)" }}>묶음</div>}
+                        {!group && d.candidates && d.candidates.length>1 && <div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)", marginTop:3 }}>후보 {d.candidates.length}명</div>}
+                      </td>
+                      <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
+                        {group ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{group.title}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>묶음 {group.resolvedCount}/{group.targetCount}명 · 대납</div></span>
+                          : best ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)" }}>{best.name}</b><div style={{ font:"10px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>{best.mgmtNo}</div></span>
+                          : <span style={{ font:"13px/1.4 var(--font-sans)", color:"var(--text-tertiary)" }}>수동매칭 필요</span>}
+                      </td>
+                      <td style={{ padding:"9px 12px", font:"13px/1.4 var(--font-sans)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{group ? "대납자 묶음" : best?.vehicleNo || "—"}</td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
+                        {(group||best) ? <span><b style={{ font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", fontVariantNumeric:"tabular-nums" }}>{won(arrears)}</b><div style={{ font:"10px/1.4 var(--font-sans)", color: diff===0?"var(--green-500)":"var(--text-tertiary)" }}>{diffText(diff)}</div></span> : "—"}
+                      </td>
+                      <td style={{ padding:"9px 12px", textAlign:"right", whiteSpace:"nowrap" }}>
+                        {!done ? (
+                          <div style={{ display:"inline-flex", gap:6 }}>
+                            {group
+                              ? <button type="button" onClick={()=>{ onGroupMatch(d, group); onToast(`${group.title} ${won(d.amount)} 묶음수납 반영`); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--violet-500)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>묶음반영</button>
+                              : <button type="button" disabled={!best} onClick={()=>{ onMatch(d, best); onToast(`${best.name} 님 ${won(d.amount)} 수납 반영`); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:best?"pointer":"default", background:best?"var(--green-500)":"var(--grey-100)", color:best?"#fff":"var(--text-muted)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>반영</button>}
+                            <button type="button" onClick={()=>setModal(d)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>{(group||best)?"후보":"수동"}</button>
+                            <button type="button" onClick={()=>onExclude(d)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>제외</button>
+                          </div>
+                        ) : <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>처리완료</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length===0 && <tr><td colSpan={9} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>매칭할 거래내역이 없습니다.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {modal && <ManualMatchModal deposit={modal} members={members} onClose={()=>setModal(null)}
         onMatch={(d,m,chargeItem)=>{ onMatch(d,{ id:m.id, name:m.name, vehicleNo:m.vehicleNo, mgmtNo:m.mgmtNo, totalArrears:D.outstanding(m), chargeItem: chargeItem||m.chargeItem }, chargeItem); onToast(`${m.name} 님 ${won(d.amount)} ${chargeItem?chargeItem:"수납"} 반영`); setModal(null); }}

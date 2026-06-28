@@ -1,6 +1,36 @@
 // 미수금 명단 — 서버사이드 페이지네이션 + 조회·필터·검색·수납처리
 const { Icon } = window.PayroleDesignSystem_9db006;
 
+function MemberCard({ m, onSelect, onPay, won, ChargeTag }) {
+  const D = window.PMData;
+  const out = D.outstanding(m);
+  return (
+    <div onClick={() => onSelect && onSelect(m)}
+      style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10, cursor: onSelect ? 'pointer' : 'default' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{m.name}</span>
+          <span style={{ font: 'var(--body-xs)', color: 'var(--text-tertiary)' }}>{m.vehicleNo || m.vehicle_no}</span>
+        </div>
+        <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: out > 0 ? 'var(--red-500)' : out < 0 ? 'var(--violet-500)' : 'var(--text-tertiary)' }}>{won(out)}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: onPay ? 10 : 0 }}>
+        <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)' }}>{m.sigun}</span>
+        {ChargeTag && <ChargeTag item={m.chargeItem} />}
+        {m.phone && <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)' }}>{m.phone}</span>}
+        {D.arrearsMonths(m) > 0 && <span style={{ font: 'var(--body-xs)', color: 'var(--red-400)', background: '#FEF2F2', padding: '2px 7px', borderRadius: 99 }}>{D.arrearsMonths(m)}개월</span>}
+      </div>
+      {onPay && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onPay(m); }}
+            style={{ height: 36, padding: '0 16px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--brand)', cursor: 'pointer', background: 'var(--brand)', color: '#fff', font: 'var(--fw-demibold) 13px/1 var(--font-sans)' }}>
+            수납</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function _cleanMemo(raw) {
   if (!raw) return "";
   const FORBIDDEN = /(?:주소|공문\s*주소|핸드폰(?:번호)?|전화번호|주민등록번호|주민번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
@@ -34,6 +64,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const D = window.PMData;
   const { won, num } = D;
   const { StatusPill, ChargeTag, MonthsChip, MemberStatusChip, Chip } = window.PMUI;
+  const isMobile = window.useMobile ? window.useMobile() : false;
 
   const [query, setQuery] = React.useState("");
   const [region, setRegion] = React.useState("");
@@ -245,7 +276,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {/* 요약 스트립 */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,minmax(0,1fr))", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(5,minmax(0,1fr))", gap:12 }}>
         {[["현재 표시",`${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`,"var(--text-primary)"],
           ["현재 페이지 합계",won(pageSumOut),"var(--text-primary)"],
           ["전체 조건 합계",won(sumOut),"var(--red-500)"],
@@ -304,93 +335,118 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
         </div>
       </div>
 
-      {/* 테이블 */}
-      <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
-        <div style={{ maxHeight:"calc(100vh - 430px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1480 }}>
-            <thead>
-              <tr>
-                <Th label="지역" /><Th label="차량번호" /><SortTh label="이름" k="name" /><Th label="계정" />
-                <Th label="기준월" /><SortTh label="미수개월" k="months" align="left" />
-                <SortTh label="원장미수" k="ledger" align="right" /><Th label="수납합계" align="right" />
-                <SortTh label="현재잔액" k="outstanding" align="right" /><Th label="핸드폰번호" />
-                <Th label="주소" /><Th label="관련명" />
-                <Th label="처리상태" /><Th label="최근수납" /><Th label="" align="right" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m)=>{
-                const out = D.outstanding(m);
-                const recent = (m.payments||[])[0];
-                return (
-                  <tr key={m.id} onClick={()=>onSelect(m)}
-                    style={{ cursor:"pointer", borderBottom:"1px solid var(--border-subtle)", transition:"background .12s" }}
-                    onMouseEnter={e=>e.currentTarget.style.background="var(--grey-25)"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.sigun}</td>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{m.vehicleNo||m.vehicle_no}</td>
-                    <td style={{ padding:cellPad, whiteSpace:"nowrap" }}>
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
-                        <b style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</b>
-                        {m.isSenior && <span style={{ font:"10px/1 var(--font-sans)", color:"var(--green-500)", fontWeight:700, padding:"2px 5px", background:"#EAF7F0", borderRadius:4 }}>70세</span>}
-                        <MemberStatusChip status={m.status} />
-                      </span>
-                    </td>
-                    <td style={{ padding:cellPad }}><ChargeTag item={m.chargeItem} /></td>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.basisYm(m)}</td>
-                    <td style={{ padding:cellPad }}><MonthsChip months={D.arrearsMonths(m)} /></td>
-                    <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(D.ledgerArrears(m))}</td>
-                    <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--green-500)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.paidTotal(m)?won(D.paidTotal(m)):"—"}</td>
-                    <td style={{ padding:cellPad, textAlign:"right", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
-                      font:"var(--fw-bold) 14px/1 var(--font-sans)",
-                      color: out>0?"var(--red-500)": out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
-                      color: m.disconnected?"var(--red-500)":"var(--text-secondary)" }}>{m.phone||"—"}</td>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={m.address||""}>{m.address||"—"}</td>
-                    <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--violet-500)", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={_relatedName(m.memo)||""}>{_relatedName(m.memo)||"—"}</td>
-                    <td style={{ padding:cellPad }}>
-                      {out<0 ? <StatusPill status="선납" /> : out===0 ? <StatusPill status="완납" /> :
-                        m.status==="정상" ? <StatusPill status="미납" /> : <MemberStatusChip status={m.status} />}
-                    </td>
-                    <td style={{ padding:cellPad, font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>
-                      {recent ? `${recent.paidDate} · ${won(recent.amount)}` : "—"}</td>
-                    <td style={{ padding:cellPad, textAlign:"right" }}>
-                      <button type="button" onClick={(e)=>{ e.stopPropagation(); onPay(m); }}
-                        style={{ height:30, padding:"0 13px", borderRadius:"var(--radius-pill)", whiteSpace:"nowrap",
-                          border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--brand)",
-                          font:"var(--fw-demibold) 12px/1 var(--font-sans)", transition:"all .12s" }}
-                        onMouseEnter={e=>{ e.currentTarget.style.background="var(--brand)"; e.currentTarget.style.color="#fff"; e.currentTarget.style.borderColor="var(--brand)"; }}
-                        onMouseLeave={e=>{ e.currentTarget.style.background="var(--white)"; e.currentTarget.style.color="var(--brand)"; e.currentTarget.style.borderColor="var(--border-default)"; }}>
-                        수납</button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length===0 && (
-                <tr><td colSpan={15} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderTop:"1px solid var(--border-subtle)", background:"var(--grey-25)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 기본값은 미납/0원 제외/선납 제외</span>
-            {serverLoading && <span style={{ font:"var(--body-xs)", color:"var(--brand)" }}>조회 중...</span>}
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+      {/* 테이블 (데스크탑) / 카드 (모바일) */}
+      {isMobile ? (
+        <div>
+          {rows.length === 0 && (
+            <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</div>
+          )}
+          {rows.map((m) => (
+            <MemberCard key={m.id} m={m} onSelect={onSelect} onPay={onPay} won={won} ChargeTag={ChargeTag} />
+          ))}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 4px" }}>
+            <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>
+              {serverLoading ? "조회 중..." : `${num(rows.length)}명 / 전체 ${num(serverTotal || rows.length)}명`}
+            </span>
             {serverRows !== null && serverTotal > PAGE_SIZE && (
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
-                  style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page===1?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page===1?0.4:1 }}>이전</button>
-                <span style={{ font:"var(--body-xs)", color:"var(--text-secondary)" }}>페이지 {page}</span>
+                  style={{ height:36, padding:"0 14px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page===1?"default":"pointer", color:"var(--text-secondary)", fontSize:13, opacity:page===1?0.4:1 }}>이전</button>
+                <span style={{ font:"var(--body-xs)", color:"var(--text-secondary)" }}>{page}페이지</span>
                 <button onClick={()=>setPage(p=>p+1)} disabled={page*PAGE_SIZE >= serverTotal}
-                  style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page*PAGE_SIZE>=serverTotal?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page*PAGE_SIZE>=serverTotal?0.4:1 }}>다음</button>
+                  style={{ height:36, padding:"0 14px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page*PAGE_SIZE>=serverTotal?"default":"pointer", color:"var(--text-secondary)", fontSize:13, opacity:page*PAGE_SIZE>=serverTotal?0.4:1 }}>다음</button>
               </div>
             )}
-            <span style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)" }}>현재 {num(rows.length)}명 / 전체 {num(serverTotal || rows.length)}명</span>
           </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", background:"var(--white)", boxShadow:"var(--shadow-xs)" }}>
+          <div style={{ maxHeight:"calc(100vh - 430px)", overflow:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1480 }}>
+              <thead>
+                <tr>
+                  <Th label="지역" /><Th label="차량번호" /><SortTh label="이름" k="name" /><Th label="계정" />
+                  <Th label="기준월" /><SortTh label="미수개월" k="months" align="left" />
+                  <SortTh label="원장미수" k="ledger" align="right" /><Th label="수납합계" align="right" />
+                  <SortTh label="현재잔액" k="outstanding" align="right" /><Th label="핸드폰번호" />
+                  <Th label="주소" /><Th label="관련명" />
+                  <Th label="처리상태" /><Th label="최근수납" /><Th label="" align="right" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((m)=>{
+                  const out = D.outstanding(m);
+                  const recent = (m.payments||[])[0];
+                  return (
+                    <tr key={m.id} onClick={()=>onSelect(m)}
+                      style={{ cursor:"pointer", borderBottom:"1px solid var(--border-subtle)", transition:"background .12s" }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--grey-25)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{m.sigun}</td>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{m.vehicleNo||m.vehicle_no}</td>
+                      <td style={{ padding:cellPad, whiteSpace:"nowrap" }}>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
+                          <b style={{ font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)" }}>{m.name}</b>
+                          {m.isSenior && <span style={{ font:"10px/1 var(--font-sans)", color:"var(--green-500)", fontWeight:700, padding:"2px 5px", background:"#EAF7F0", borderRadius:4 }}>70세</span>}
+                          <MemberStatusChip status={m.status} />
+                        </span>
+                      </td>
+                      <td style={{ padding:cellPad }}><ChargeTag item={m.chargeItem} /></td>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.basisYm(m)}</td>
+                      <td style={{ padding:cellPad }}><MonthsChip months={D.arrearsMonths(m)} /></td>
+                      <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(D.ledgerArrears(m))}</td>
+                      <td style={{ padding:cellPad, textAlign:"right", font:"var(--body-sm)", color:"var(--green-500)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{D.paidTotal(m)?won(D.paidTotal(m)):"—"}</td>
+                      <td style={{ padding:cellPad, textAlign:"right", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
+                        font:"var(--fw-bold) 14px/1 var(--font-sans)",
+                        color: out>0?"var(--red-500)": out<0?"var(--violet-500)":"var(--text-tertiary)" }}>{won(out)}</td>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums",
+                        color: m.disconnected?"var(--red-500)":"var(--text-secondary)" }}>{m.phone||"—"}</td>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={m.address||""}>{m.address||"—"}</td>
+                      <td style={{ padding:cellPad, font:"var(--body-sm)", color:"var(--violet-500)", maxWidth:100, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={_relatedName(m.memo)||""}>{_relatedName(m.memo)||"—"}</td>
+                      <td style={{ padding:cellPad }}>
+                        {out<0 ? <StatusPill status="선납" /> : out===0 ? <StatusPill status="완납" /> :
+                          m.status==="정상" ? <StatusPill status="미납" /> : <MemberStatusChip status={m.status} />}
+                      </td>
+                      <td style={{ padding:cellPad, font:"var(--body-xs)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>
+                        {recent ? `${recent.paidDate} · ${won(recent.amount)}` : "—"}</td>
+                      <td style={{ padding:cellPad, textAlign:"right" }}>
+                        <button type="button" onClick={(e)=>{ e.stopPropagation(); onPay(m); }}
+                          style={{ height:30, padding:"0 13px", borderRadius:"var(--radius-pill)", whiteSpace:"nowrap",
+                            border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--brand)",
+                            font:"var(--fw-demibold) 12px/1 var(--font-sans)", transition:"all .12s" }}
+                          onMouseEnter={e=>{ e.currentTarget.style.background="var(--brand)"; e.currentTarget.style.color="#fff"; e.currentTarget.style.borderColor="var(--brand)"; }}
+                          onMouseLeave={e=>{ e.currentTarget.style.background="var(--white)"; e.currentTarget.style.color="var(--brand)"; e.currentTarget.style.borderColor="var(--border-default)"; }}>
+                          수납</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length===0 && (
+                  <tr><td colSpan={15} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>조건에 맞는 회원이 없습니다.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderTop:"1px solid var(--border-subtle)", background:"var(--grey-25)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 기본값은 미납/0원 제외/선납 제외</span>
+              {serverLoading && <span style={{ font:"var(--body-xs)", color:"var(--brand)" }}>조회 중...</span>}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              {serverRows !== null && serverTotal > PAGE_SIZE && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
+                    style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page===1?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page===1?0.4:1 }}>이전</button>
+                  <span style={{ font:"var(--body-xs)", color:"var(--text-secondary)" }}>페이지 {page}</span>
+                  <button onClick={()=>setPage(p=>p+1)} disabled={page*PAGE_SIZE >= serverTotal}
+                    style={{ height:28, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-pill)", background:"var(--white)", cursor:page*PAGE_SIZE>=serverTotal?"default":"pointer", color:"var(--text-secondary)", fontSize:12, opacity:page*PAGE_SIZE>=serverTotal?0.4:1 }}>다음</button>
+                </div>
+              )}
+              <span style={{ font:"var(--fw-medium) 13px/1 var(--font-sans)", color:"var(--text-secondary)" }}>현재 {num(rows.length)}명 / 전체 {num(serverTotal || rows.length)}명</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

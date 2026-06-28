@@ -47,6 +47,8 @@ function TabRegional({ members, exclusionRules, onToast }) {
   const D = window.PMData;
   const { won, REGIONS } = D;
   const { ChargeTag } = window.PMUI;
+  const isMobile = window.useMobile ? window.useMobile() : false;
+  const [filterOpen, setFilterOpen] = React.useState(!isMobile);
   const [regions, setRegions] = React.useState([]);
   const [charges, setCharges] = React.useState(["협회비","관리비"]);
   const [senior, setSenior] = React.useState(true);
@@ -98,37 +100,46 @@ function TabRegional({ members, exclusionRules, onToast }) {
   const sectionTitle = { font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", letterSpacing:"0.02em", marginBottom:10 };
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:24, alignItems:"start" }}>
-      <Card style={{ position:"sticky", top:0 }}>
-        <div style={sectionTitle}>지역 선택</div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
-          <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
-          {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
-        </div>
-        <div style={sectionTitle}>부과항목</div>
-        <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap" }}>
-          {["협회비","관리비"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
-          <RChip active={senior} onClick={()=>setSenior(!senior)}>70세 포함</RChip>
-        </div>
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
-        <div style={sectionTitle}>금액 기준</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
-            <input type="number" placeholder="제한없음" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+    <div style={{ display: isMobile ? "flex" : "grid", flexDirection: isMobile ? "column" : undefined, gridTemplateColumns: isMobile ? undefined : "300px 1fr", gap:24, alignItems:"start" }}>
+      {isMobile && (
+        <button type="button" onClick={() => setFilterOpen(f => !f)}
+          style={{ width:"100%", height:44, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-secondary)", display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:0 }}>
+          <Icon name={filterOpen ? "chevron-up" : "filter"} size={16} />
+          {filterOpen ? "필터 닫기" : "필터 열기"}
+        </button>
+      )}
+      {(!isMobile || filterOpen) && (
+        <Card style={isMobile ? {} : { position:"sticky", top:0 }}>
+          <div style={sectionTitle}>지역 선택</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
+            <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
+            {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
           </div>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
-            <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          <div style={sectionTitle}>부과항목</div>
+          <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap" }}>
+            {["협회비","관리비"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
+            <RChip active={senior} onClick={()=>setSenior(!senior)}>70세 포함</RChip>
           </div>
-        </div>
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
-        <OptToggle label="0원 포함" checked={incZero} onChange={setIncZero} />
-        <OptToggle label="선납 포함" checked={incPrepaid} onChange={setIncPrepaid} />
-        <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
-      </Card>
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
+          <div style={sectionTitle}>금액 기준</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
+              <input type="number" placeholder="제한없음" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
+              <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
+          </div>
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
+          <OptToggle label="0원 포함" checked={incZero} onChange={setIncZero} />
+          <OptToggle label="선납 포함" checked={incPrepaid} onChange={setIncPrepaid} />
+          <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
+        </Card>
+      )}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:24 }}>
@@ -189,6 +200,8 @@ function TabRegional({ members, exclusionRules, onToast }) {
 function TabSms({ members, exclusionRules, onToast }) {
   const D = window.PMData;
   const { won, REGIONS } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
+  const [filterOpen, setFilterOpen] = React.useState(!isMobile);
   const [regions, setRegions] = React.useState([]);
   const [minAmt, setMinAmt] = React.useState(30000);
   const [minAmtInput, setMinAmtInput] = React.useState("30000");
@@ -237,35 +250,44 @@ function TabSms({ members, exclusionRules, onToast }) {
   const sectionTitle = { font:"var(--fw-demibold) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", letterSpacing:"0.02em", marginBottom:10 };
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:24, alignItems:"start" }}>
-      <Card style={{ position:"sticky", top:0 }}>
-        <div style={sectionTitle}>지역 선택</div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
-          <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
-          {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
-        </div>
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
-        <div style={sectionTitle}>금액 기준</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
-            <input type="number" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+    <div style={{ display: isMobile ? "flex" : "grid", flexDirection: isMobile ? "column" : undefined, gridTemplateColumns: isMobile ? undefined : "300px 1fr", gap:24, alignItems:"start" }}>
+      {isMobile && (
+        <button type="button" onClick={() => setFilterOpen(f => !f)}
+          style={{ width:"100%", height:44, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-secondary)", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <Icon name={filterOpen ? "chevron-up" : "filter"} size={16} />
+          {filterOpen ? "필터 닫기" : "필터 열기"}
+        </button>
+      )}
+      {(!isMobile || filterOpen) && (
+        <Card style={isMobile ? {} : { position:"sticky", top:0 }}>
+          <div style={sectionTitle}>지역 선택</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
+            <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
+            {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
           </div>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
-            <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
+          <div style={sectionTitle}>금액 기준</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
+              <input type="number" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
+              <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
           </div>
-        </div>
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
-        <div style={sectionTitle}>제외 조건</div>
-        <OptToggle label="전화번호 없는 사람 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
-        <OptToggle label="결번/반송 제외" checked={excludeDisconnected} onChange={setExcludeDisconnected} />
-        <OptToggle label="자동이체자 제외" checked={excludeAutoPay} onChange={setExcludeAutoPay} />
-        <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
-        <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
-      </Card>
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
+          <div style={sectionTitle}>제외 조건</div>
+          <OptToggle label="전화번호 없는 사람 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
+          <OptToggle label="결번/반송 제외" checked={excludeDisconnected} onChange={setExcludeDisconnected} />
+          <OptToggle label="자동이체자 제외" checked={excludeAutoPay} onChange={setExcludeAutoPay} />
+          <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeGiro} onChange={setExcludeGiro} />
+          <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
+        </Card>
+      )}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:24 }}>
@@ -320,6 +342,8 @@ function TabSms({ members, exclusionRules, onToast }) {
 function TabAltoran({ members, exclusionRules, onToast }) {
   const D = window.PMData;
   const { REGIONS, won } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
+  const [filterOpen, setFilterOpen] = React.useState(!isMobile);
   const today = new Date();
   const [issueMonth, setIssueMonth] = React.useState(String(today.getMonth()+1));
   const [issueYear, setIssueYear] = React.useState(String(today.getFullYear()));
@@ -452,58 +476,67 @@ function TabAltoran({ members, exclusionRules, onToast }) {
   const totalAmt = eligible.reduce((s,m) => s + (D.outstanding ? D.outstanding(m) : (m.arrears_amount ?? m.totalArrears ?? 0)), 0);
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:24, alignItems:"start" }}>
-      <Card style={{ position:"sticky", top:0 }}>
-        <div style={sectionTitle}>발행 설정</div>
-        <div style={{ display:"flex", gap:6, marginBottom:8 }}>
-          <select value={issueYear} onChange={e=>setIssueYear(e.target.value)} style={{ flex:1, height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)", boxSizing:"border-box" }}>
-            {[today.getFullYear()-1, today.getFullYear(), today.getFullYear()+1].map(y=><option key={y} value={y}>{y}년</option>)}
-          </select>
-          <select value={issueMonth} onChange={e=>setIssueMonth(e.target.value)} style={{ flex:1, height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)", boxSizing:"border-box" }}>
-            {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{m}월</option>)}
-          </select>
-        </div>
-        <div style={{ marginBottom:14 }}>
-          <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>발행연월일</div>
-          <input type="text" value={issueDate} onChange={e=>setIssueDate(e.target.value)} placeholder="2026.06.22." style={{ width:"100%", boxSizing:"border-box", height:32, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)" }} />
-        </div>
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"4px 0 14px" }} />
-
-        <div style={sectionTitle}>지역 선택</div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
-          <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
-          {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
-        </div>
-
-        <div style={sectionTitle}>부과항목</div>
-        <div style={{ display:"flex", gap:7, marginBottom:14, flexWrap:"wrap" }}>
-          {["협회비","관리비","70세"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
-        </div>
-
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"4px 0 14px" }} />
-
-        <div style={sectionTitle}>금액 기준</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
-            <input type="number" placeholder="제한없음" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+    <div style={{ display: isMobile ? "flex" : "grid", flexDirection: isMobile ? "column" : undefined, gridTemplateColumns: isMobile ? undefined : "300px 1fr", gap:24, alignItems:"start" }}>
+      {isMobile && (
+        <button type="button" onClick={() => setFilterOpen(f => !f)}
+          style={{ width:"100%", height:44, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", background:"var(--white)", cursor:"pointer", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-secondary)", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <Icon name={filterOpen ? "chevron-up" : "filter"} size={16} />
+          {filterOpen ? "필터 닫기" : "필터 열기"}
+        </button>
+      )}
+      {(!isMobile || filterOpen) && (
+        <Card style={isMobile ? {} : { position:"sticky", top:0 }}>
+          <div style={sectionTitle}>발행 설정</div>
+          <div style={{ display:"flex", gap:6, marginBottom:8 }}>
+            <select value={issueYear} onChange={e=>setIssueYear(e.target.value)} style={{ flex:1, height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)", boxSizing:"border-box" }}>
+              {[today.getFullYear()-1, today.getFullYear(), today.getFullYear()+1].map(y=><option key={y} value={y}>{y}년</option>)}
+            </select>
+            <select value={issueMonth} onChange={e=>setIssueMonth(e.target.value)} style={{ flex:1, height:34, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)", boxSizing:"border-box" }}>
+              {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{m}월</option>)}
+            </select>
           </div>
-          <div>
-            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
-            <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
-              style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+          <div style={{ marginBottom:14 }}>
+            <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>발행연월일</div>
+            <input type="text" value={issueDate} onChange={e=>setIssueDate(e.target.value)} placeholder="2026.06.22." style={{ width:"100%", boxSizing:"border-box", height:32, padding:"0 10px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"13px/1 var(--font-sans)" }} />
           </div>
-        </div>
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"4px 0 14px" }} />
 
-        <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
+          <div style={sectionTitle}>지역 선택</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:18 }}>
+            <RChip active={regions.length===0} onClick={()=>setRegions([])}>전체</RChip>
+            {REGIONS.map(r => <RChip key={r} active={regions.includes(r)} onClick={()=>toggleRegion(r)}>{r}</RChip>)}
+          </div>
 
-        <div style={sectionTitle}>제외 조건</div>
-        <OptToggle label="핸드폰 없는 회원 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
-        <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeJiro} onChange={setExcludeJiro} />
-        <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
-        <OptToggle label="자동이체자 제외" sub="규칙 및 비고 기준" checked={excludeAuto} onChange={setExcludeAuto} />
-      </Card>
+          <div style={sectionTitle}>부과항목</div>
+          <div style={{ display:"flex", gap:7, marginBottom:14, flexWrap:"wrap" }}>
+            {["협회비","관리비","70세"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
+          </div>
+
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"4px 0 14px" }} />
+
+          <div style={sectionTitle}>금액 기준</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최소금액</div>
+              <input type="number" placeholder="제한없음" value={minAmtInput} onChange={e=>{ setMinAmtInput(e.target.value); setMinAmt(e.target.value ? parseInt(e.target.value,10) : 0); }}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
+            <div>
+              <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginBottom:4 }}>최대금액</div>
+              <input type="number" placeholder="제한없음" value={maxAmtInput} onChange={e=>setMaxAmtInput(e.target.value)}
+                style={{ width:"100%", boxSizing:"border-box", minWidth:0, height:32, padding:"0 8px", border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--body-sm)", color:"var(--text-primary)", textAlign:"right" }} />
+            </div>
+          </div>
+
+          <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
+
+          <div style={sectionTitle}>제외 조건</div>
+          <OptToggle label="핸드폰 없는 회원 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
+          <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeJiro} onChange={setExcludeJiro} />
+          <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />
+          <OptToggle label="자동이체자 제외" sub="규칙 및 비고 기준" checked={excludeAuto} onChange={setExcludeAuto} />
+        </Card>
+      )}
 
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", padding:"16px 20px", boxShadow:"var(--shadow-xs)" }}>

@@ -153,3 +153,14 @@ function DownloadBtn({ onClick, label="엑셀 다운로드" }){
 }
 
 window.PMUI = { StatusPill, ChargeTag, AccountingTag, MonthsChip, MemberStatusChip, MEMBERTYPE_STYLE, YearMonth, Chip, SearchBox, DownloadBtn };
+
+function useMobile() {
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth <= 768);
+  React.useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+window.useMobile = useMobile;

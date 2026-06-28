@@ -183,9 +183,39 @@ function StatusChangeModal({ row, onClose, onSave, onToast }) {
   );
 }
 
+function ClosureCard({ c, onDetail, onStatusChange, onRestore, onCancelProcess }) {
+  const { won } = window.PMData;
+  const displayType = c.type === "폐지" ? "폐업" : c.type;
+  return (
+    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CTypeBadge type={displayType} />
+          <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{c.name}</span>
+        </div>
+        <span style={{ font: 'var(--fw-bold) 14px/1 var(--font-sans)', color: (c.unpaidBalance||0)>0?"var(--red-500)":"var(--text-tertiary)" }}>{won(c.unpaidBalance||0)}</span>
+      </div>
+      <div style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', marginBottom: 6 }}>
+        {c.sigun} · {c.vehicleNo||"—"} · {c.processDate||"—"}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <CollectBadge status={c.collectStatus} />
+        {c.phone && <span style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)' }}>{c.phone}</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => onDetail(c)} style={{ height:34, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>이력보기</button>
+        <button type="button" onClick={() => onStatusChange({ ...c, type: displayType })} style={{ height:34, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>상태변경</button>
+        <button type="button" onClick={() => onRestore(c)} style={{ height:34, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--brand)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>정상복구</button>
+        <button type="button" onClick={() => onCancelProcess(c)} style={{ height:34, padding:"0 10px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-medium) 11px/1 var(--font-sans)" }}>처리취소</button>
+      </div>
+    </div>
+  );
+}
+
 function Closures({ closures, onRestore, onStatusChange, onToast, onRefresh }) {
   const D = window.PMData;
   const { won, num } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [type, setType] = React.useState("전체");
   const [onlyDebt, setOnlyDebt] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -246,7 +276,7 @@ function Closures({ closures, onRestore, onStatusChange, onToast, onRefresh }) {
       {detail && <DetailModal row={detail} onClose={() => setDetail(null)} onToast={onToast} />}
       {statusRow && <StatusChangeModal row={statusRow} onClose={() => setStatusRow(null)} onSave={onStatusChange} onToast={onToast} />}
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap:12 }}>
         {[
           ["폐업·이탈 전체", `${num(closures.length)}명`, "var(--text-primary)"],
           ["추심 대상 (미납잔액)", `${num(collectCount)}명`, "var(--red-500)"],
@@ -269,72 +299,86 @@ function Closures({ closures, onRestore, onStatusChange, onToast, onRefresh }) {
         </div>
       </div>
 
-      <Card padded={false}>
+      <div style={{ background:"var(--white)", border:"1px solid var(--border-subtle)", borderRadius:"var(--radius-lg)", overflow:"hidden", boxShadow:"var(--shadow-xs)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 20px", borderBottom:"1px solid var(--border-subtle)" }}>
           <Icon name="secure" size={16} color="#B9791A" />
           <span style={{ font:"var(--body-xs)", color:"var(--text-secondary)" }}>폐업·양도·이관·탈퇴자는 미수금 일반 명단에서 제외됩니다. 미납잔액이 남은 경우 <b style={{ color:"var(--red-500)" }}>추심 대상</b>으로 관리합니다. 회원 데이터는 절대 삭제되지 않습니다.</span>
         </div>
-        <div style={{ maxHeight:"calc(100vh - 420px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr>
-              <Th label="처리구분" />
-              <Th label="지역" />
-              <Th label="성명" />
-              <Th label="전화번호" />
-              <Th label="주소" />
-              <Th label="차량번호" />
-              <Th label="관리번호" />
-              <Th label="처리일" />
-              <Th label="공문번호" />
-              <Th label="처리출처" />
-              <Th label="미납잔액" align="right" />
-              <Th label="미납항목" />
-              <Th label="미납기간" />
-              <Th label="추심상태" />
-              <Th label="마지막안내일" />
-              <Th label="메모" />
-              <Th label="처리" align="right" />
-            </tr></thead>
-            <tbody>
-              {rows.map(c => {
-                const displayType = c.type === "폐지" ? "폐업" : c.type;
-                return (
-                  <tr key={c.id} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
-                    <td style={{ padding:"10px 14px" }}><CTypeBadge type={displayType} /></td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.sigun||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.name}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.phone||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={c.address||""}>{c.address||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.vehicleNo||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.mgmtNo||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.processDate||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.docNo||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.processSource||"—"}</td>
-                    <td style={{ padding:"10px 14px", textAlign:"right", whiteSpace:"nowrap", font:"var(--fw-bold) 13px/1 var(--font-sans)", color:(c.unpaidBalance||0)>0?"var(--red-500)":"var(--text-tertiary)" }}>{won(c.unpaidBalance||0)}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.unpaidItems||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.unpaidPeriod||"—"}</td>
-                    <td style={{ padding:"10px 14px" }}><CollectBadge status={c.collectStatus} /></td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.lastNoticeDate||"—"}</td>
-                    <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
-                      title={c.memo||""}>{c.memo||"—"}</td>
-                    <td style={{ padding:"10px 14px", textAlign:"right", whiteSpace:"nowrap" }}>
-                      <div style={{ display:"inline-flex", gap:4 }}>
-                        <ActionBtn onClick={() => setDetail(c)}>이력보기</ActionBtn>
-                        <ActionBtn onClick={() => setStatusRow({ ...c, type: displayType })}>상태변경</ActionBtn>
-                        <ActionBtn onClick={() => handleRestore(c)} color="var(--brand)">정상복구</ActionBtn>
-                        <ActionBtn onClick={() => handleCancelProcess(c)}>처리취소</ActionBtn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr><td colSpan={17} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+        {isMobile ? (
+          <div style={{ padding:"12px" }}>
+            {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</div>}
+            {rows.map(c => (
+              <ClosureCard key={c.id} c={c}
+                onDetail={setDetail}
+                onStatusChange={setStatusRow}
+                onRestore={handleRestore}
+                onCancelProcess={handleCancelProcess}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{ maxHeight:"calc(100vh - 420px)", overflow:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr>
+                <Th label="처리구분" />
+                <Th label="지역" />
+                <Th label="성명" />
+                <Th label="전화번호" />
+                <Th label="주소" />
+                <Th label="차량번호" />
+                <Th label="관리번호" />
+                <Th label="처리일" />
+                <Th label="공문번호" />
+                <Th label="처리출처" />
+                <Th label="미납잔액" align="right" />
+                <Th label="미납항목" />
+                <Th label="미납기간" />
+                <Th label="추심상태" />
+                <Th label="마지막안내일" />
+                <Th label="메모" />
+                <Th label="처리" align="right" />
+              </tr></thead>
+              <tbody>
+                {rows.map(c => {
+                  const displayType = c.type === "폐지" ? "폐업" : c.type;
+                  return (
+                    <tr key={c.id} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
+                      <td style={{ padding:"10px 14px" }}><CTypeBadge type={displayType} /></td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.sigun||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{c.name}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.phone||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={c.address||""}>{c.address||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.vehicleNo||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.mgmtNo||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.processDate||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.docNo||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.processSource||"—"}</td>
+                      <td style={{ padding:"10px 14px", textAlign:"right", whiteSpace:"nowrap", font:"var(--fw-bold) 13px/1 var(--font-sans)", color:(c.unpaidBalance||0)>0?"var(--red-500)":"var(--text-tertiary)" }}>{won(c.unpaidBalance||0)}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.unpaidItems||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{c.unpaidPeriod||"—"}</td>
+                      <td style={{ padding:"10px 14px" }}><CollectBadge status={c.collectStatus} /></td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{c.lastNoticeDate||"—"}</td>
+                      <td style={{ padding:"10px 14px", font:"var(--body-sm)", color:"var(--text-tertiary)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+                        title={c.memo||""}>{c.memo||"—"}</td>
+                      <td style={{ padding:"10px 14px", textAlign:"right", whiteSpace:"nowrap" }}>
+                        <div style={{ display:"inline-flex", gap:4 }}>
+                          <ActionBtn onClick={() => setDetail(c)}>이력보기</ActionBtn>
+                          <ActionBtn onClick={() => setStatusRow({ ...c, type: displayType })}>상태변경</ActionBtn>
+                          <ActionBtn onClick={() => handleRestore(c)} color="var(--brand)">정상복구</ActionBtn>
+                          <ActionBtn onClick={() => handleCancelProcess(c)}>처리취소</ActionBtn>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 && (
+                  <tr><td colSpan={17} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>해당하는 폐업·이탈 회원이 없습니다.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

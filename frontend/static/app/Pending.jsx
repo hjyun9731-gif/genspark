@@ -1,8 +1,33 @@
 // 신규 · 예정자 — 자격증명 발급 예정/신규 등록 대기 → 등록·수정·삭제·전체자명단 전환
 const { Card, Icon, Button } = window.PayroleDesignSystem_9db006;
 
+function PendingCard({ p, onEdit, onDelete, onPromote, won }) {
+  return (
+    <div style={{ background: 'var(--white)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display:"inline-flex", padding:"3px 10px", borderRadius:"var(--radius-pill)", font:"var(--fw-demibold) 12px/1 var(--font-sans)",
+            background: p.kind==="신규"?"var(--blue-100)":"#FFF3DC", color: p.kind==="신규"?"var(--blue-600)":"#B9791A" }}>{p.kind}</span>
+          <span style={{ font: 'var(--fw-bold) 15px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{p.name}</span>
+        </div>
+        <span style={{ font: 'var(--fw-demibold) 13px/1 var(--font-sans)', color: 'var(--text-primary)' }}>{won(p.monthlyCharge)}</span>
+      </div>
+      <div style={{ font: 'var(--body-xs)', color: 'var(--text-secondary)', marginBottom: 6 }}>
+        {p.sigun} · {p.vehicleNo} · {p.billingStartYm} 부과 시작
+      </div>
+      {p.reason && <div style={{ font: 'var(--body-xs)', color: p.phone ? "var(--text-tertiary)" : "var(--red-500)", marginBottom: 10 }}>{p.reason}</div>}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => onPromote(p)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>명단 전환</button>
+        <button type="button" onClick={() => onEdit(p)} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>수정</button>
+        <button type="button" onClick={() => { if(confirm(`${p.name} 예정자를 삭제할까요?`)) onDelete(p); }} style={{ height:36, padding:"0 12px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>삭제</button>
+      </div>
+    </div>
+  );
+}
+
 function Pending({ pending, onAdd, onUpdate, onDelete, onPromote, onToast }){
   const D = window.PMData; const { won, num } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [kind, setKind] = React.useState("전체");
   const [q, setQ] = React.useState("");
   const [editing, setEditing] = React.useState(null); // {mode:'add'|'edit', row}
@@ -24,7 +49,7 @@ function Pending({ pending, onAdd, onUpdate, onDelete, onPromote, onToast }){
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap:12 }}>
         {[["등록 대기 전체",`${num(pending.length)}명`,"var(--text-primary)"],
           ["신규 등록",`${num(pending.filter(p=>p.kind==="신규").length)}명`,"var(--brand)"],
           ["부과 예정",`${num(pending.filter(p=>p.kind==="예정").length)}명`,"#B9791A"]].map(([l,v,c])=>(
@@ -50,39 +75,52 @@ function Pending({ pending, onAdd, onUpdate, onDelete, onPromote, onToast }){
           <Icon name="add-user" size={18} color="var(--brand)" />
           <span style={{ font:"var(--body-sm)", color:"var(--text-secondary)" }}>자격증명 발급 다음 달부터 부과됩니다. 승인·확인이 끝나면 <b style={{ color:"var(--brand)" }}>전체자명단 전환</b>으로 정식 회원 명단에 추가합니다.</span>
         </div>
-        <div style={{ maxHeight:"calc(100vh - 380px)", overflow:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr>
-              <Th label="구분" /><Th label="성명" /><Th label="지역" /><Th label="차량번호" /><Th label="가입" /><Th label="자격증명 발급일" /><Th label="부과 시작" /><Th label="월부과금" align="right" /><Th label="확인사항" /><Th label="처리" align="right" />
-            </tr></thead>
-            <tbody>
-              {rows.map(p=>(
-                <tr key={p.id} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
-                  <td style={{ padding:"12px 16px" }}>
-                    <span style={{ display:"inline-flex", padding:"3px 10px", borderRadius:"var(--radius-pill)", font:"var(--fw-demibold) 12px/1 var(--font-sans)",
-                      background: p.kind==="신규"?"var(--blue-100)":"#FFF3DC", color: p.kind==="신규"?"var(--blue-600)":"#B9791A" }}>{p.kind}</span>
-                  </td>
-                  <td style={{ padding:"12px 16px", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{p.name}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{p.sigun}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{p.vehicleNo}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{p.membership}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{p.certIssueDate||"—"}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{p.billingStartYm}</td>
-                  <td style={{ padding:"12px 16px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(p.monthlyCharge)}</td>
-                  <td style={{ padding:"12px 16px", font:"var(--body-sm)", color: p.phone?"var(--text-secondary)":"var(--red-500)", maxWidth:240 }}>{p.reason}</td>
-                  <td style={{ padding:"12px 16px", textAlign:"right", whiteSpace:"nowrap" }}>
-                    <div style={{ display:"inline-flex", gap:6 }}>
-                      <button type="button" onClick={()=>onPromote(p)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>명단 전환</button>
-                      <button type="button" onClick={()=>setEditing({ mode:"edit", row:p })} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>수정</button>
-                      <button type="button" onClick={()=>{ if(confirm(`${p.name} 예정자를 삭제할까요?`)) onDelete(p); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>삭제</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {rows.length===0 && <tr><td colSpan={10} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>등록 대기 중인 예정자가 없습니다.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        {isMobile ? (
+          <div style={{ padding:"12px" }}>
+            {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>등록 대기 중인 예정자가 없습니다.</div>}
+            {rows.map(p => (
+              <PendingCard key={p.id} p={p} won={won}
+                onEdit={(row) => setEditing({ mode:"edit", row })}
+                onDelete={onDelete}
+                onPromote={onPromote}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{ maxHeight:"calc(100vh - 380px)", overflow:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr>
+                <Th label="구분" /><Th label="성명" /><Th label="지역" /><Th label="차량번호" /><Th label="가입" /><Th label="자격증명 발급일" /><Th label="부과 시작" /><Th label="월부과금" align="right" /><Th label="확인사항" /><Th label="처리" align="right" />
+              </tr></thead>
+              <tbody>
+                {rows.map(p=>(
+                  <tr key={p.id} style={{ borderBottom:"1px solid var(--border-subtle)" }}>
+                    <td style={{ padding:"12px 16px" }}>
+                      <span style={{ display:"inline-flex", padding:"3px 10px", borderRadius:"var(--radius-pill)", font:"var(--fw-demibold) 12px/1 var(--font-sans)",
+                        background: p.kind==="신규"?"var(--blue-100)":"#FFF3DC", color: p.kind==="신규"?"var(--blue-600)":"#B9791A" }}>{p.kind}</span>
+                    </td>
+                    <td style={{ padding:"12px 16px", font:"var(--fw-demibold) 14px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{p.name}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{p.sigun}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{p.vehicleNo}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{p.membership}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{p.certIssueDate||"—"}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color:"var(--text-tertiary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{p.billingStartYm}</td>
+                    <td style={{ padding:"12px 16px", textAlign:"right", font:"var(--fw-demibold) 13px/1 var(--font-sans)", color:"var(--text-primary)", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{won(p.monthlyCharge)}</td>
+                    <td style={{ padding:"12px 16px", font:"var(--body-sm)", color: p.phone?"var(--text-secondary)":"var(--red-500)", maxWidth:240 }}>{p.reason}</td>
+                    <td style={{ padding:"12px 16px", textAlign:"right", whiteSpace:"nowrap" }}>
+                      <div style={{ display:"inline-flex", gap:6 }}>
+                        <button type="button" onClick={()=>onPromote(p)} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"none", cursor:"pointer", background:"var(--brand)", color:"#fff", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>명단 전환</button>
+                        <button type="button" onClick={()=>setEditing({ mode:"edit", row:p })} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>수정</button>
+                        <button type="button" onClick={()=>{ if(confirm(`${p.name} 예정자를 삭제할까요?`)) onDelete(p); }} style={{ height:28, padding:"0 11px", borderRadius:"var(--radius-pill)", border:"1px solid var(--border-default)", cursor:"pointer", background:"var(--white)", color:"var(--text-tertiary)", font:"var(--fw-demibold) 12px/1 var(--font-sans)" }}>삭제</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {rows.length===0 && <tr><td colSpan={10} style={{ padding:"60px", textAlign:"center", color:"var(--text-tertiary)", font:"var(--body-md)" }}>등록 대기 중인 예정자가 없습니다.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {editing && <PendingEditModal mode={editing.mode} row={editing.row} onClose={()=>setEditing(null)}
@@ -93,6 +131,7 @@ function Pending({ pending, onAdd, onUpdate, onDelete, onPromote, onToast }){
 
 function PendingEditModal({ mode, row, onClose, onSave }){
   const D = window.PMData;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [f, setF] = React.useState(row);
   const set = (k,v)=> setF(s=>({ ...s, [k]:v }));
   const monthly = f.membership==="협회가입" ? (f.reason && f.reason.includes("70세") ? 5000 : 10000) : 5000;
@@ -100,10 +139,10 @@ function PendingEditModal({ mode, row, onClose, onSave }){
   const label = { font:"var(--fw-medium) 12px/1 var(--font-sans)", color:"var(--text-tertiary)", marginBottom:7, display:"block" };
   const inp = { width:"100%", height:42, padding:"0 14px", boxSizing:"border-box", minWidth:0, border:"1px solid var(--border-default)", borderRadius:"var(--radius-md)", font:"var(--fw-medium) 14px/1 var(--font-sans)", color:"var(--text-primary)", outline:"none", background:"var(--white)" };
   const sel = { ...inp, appearance:"none", cursor:"pointer", paddingRight:34, backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 6 12' fill='%239096A2'><path d='M0 4l3 4 3-4'/></svg>\")", backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center" };
-  const G2 = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 };
+  const G2 = { display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:12 };
   return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(10,17,47,0.38)", display:"flex", justifyContent:"center", alignItems:"center", backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:"min(740px,calc(100vw - 32px))", maxHeight:"85vh", background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", display:"flex", flexDirection:"column" }}>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:120, background:"rgba(10,17,47,0.38)", display:"flex", justifyContent:"center", alignItems: isMobile ? "flex-end" : "center", backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : "min(740px,calc(100vw - 32px))", maxWidth:"100vw", maxHeight: isMobile ? "90vh" : "85vh", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", display:"flex", flexDirection:"column" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)", flex:"none" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>{mode==="add"?"예정자 등록":"예정자 수정"}</div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="close" size={16} style={{ color:"var(--text-secondary)" }} /></button>

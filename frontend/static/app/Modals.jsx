@@ -2,10 +2,12 @@
 const { Icon, Button, Avatar } = window.PayroleDesignSystem_9db006;
 
 function Backdrop({ onClose, children, align="center" }) {
+  const isMobile = window.useMobile ? window.useMobile() : false;
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:100,
       background:"rgba(10,17,47,0.38)", display:"flex",
-      justifyContent:align==="right"?"flex-end":"center", alignItems:align==="right"?"stretch":"center",
+      justifyContent: isMobile ? "center" : (align==="right"?"flex-end":"center"),
+      alignItems: isMobile ? "flex-end" : (align==="right"?"stretch":"center"),
       backdropFilter:"blur(2px)", animation:"pmFade .15s ease" }}>
       {children}
     </div>
@@ -65,6 +67,7 @@ window.relatedName = relatedName;
 function PayModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
   const { won } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const curBalance = D.outstanding(member);
   const [chargeItem, setChargeItem] = React.useState(member.chargeItem || "관리비");
   const [amount, setAmount] = React.useState(Math.max(curBalance, member.monthlyCharge||0));
@@ -88,7 +91,7 @@ function PayModal({ member, onClose, onConfirm }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:480, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight:"92vh", display:"flex", flexDirection:"column" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : 480, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "92vh", display:"flex", flexDirection:"column" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div>
             <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>수납 반영</div>
@@ -189,6 +192,7 @@ const SIGUN_LIST = ["춘천시","원주시","강릉시","동해시","태백시",
 function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpdate, onToast }) {
   const D = window.PMData;
   const { won } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [tab, setTab] = React.useState("기본정보");
   const [member, setMember] = React.useState(initialMember);
   const [loading, setLoading] = React.useState(false);
@@ -292,7 +296,7 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:"min(980px, calc(100vw - 48px))", maxHeight:"92vh", background:"var(--white)", borderRadius:"var(--radius-xl)", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmPop .18s ease", overflow:"hidden" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : "min(980px, calc(100vw - 48px))", maxWidth:"100vw", maxHeight: isMobile ? "90vh" : "92vh", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", display:"flex", flexDirection:"column", boxShadow:"var(--shadow-lg)", animation:"pmPop .18s ease", overflow:"hidden" }}>
         {/* 헤더 */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px", borderBottom:"1px solid var(--border-subtle)", background:"var(--white)", zIndex:2, flex:"none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -494,8 +498,8 @@ function MemberDetail({ member: initialMember, onClose, onPay, onClosure, onUpda
         </div>
 
         {/* 하단 버튼 */}
-        <div style={{ flex:"none", padding:"14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10 }}>
-          <button onClick={()=>onClosure(member)} style={{ height:38, minWidth:104, flex:"0 0 auto", padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
+        <div style={{ flex:"none", padding: isMobile ? "12px 16px" : "14px 24px", borderTop:"1px solid var(--border-subtle)", background:"var(--white)", display:"flex", gap:10, position: isMobile ? "sticky" : "static", bottom:0, zIndex:10 }}>
+          <button onClick={()=>onClosure(member)} style={{ height: isMobile ? 44 : 38, minWidth:104, flex:"0 0 auto", padding:"0 16px", borderRadius:"var(--radius-md)", border:"1px solid var(--border-default)", background:"var(--white)", color:"var(--text-secondary)", font:"var(--fw-medium) 14px/1 var(--font-sans)", cursor:"pointer", whiteSpace:"nowrap" }}>폐업·이탈</button>
           <Button variant="primary" size="medium" fullWidth leadingIcon="dollar" onClick={()=>onPay(member)}>수납 반영</Button>
         </div>
       </div>
@@ -544,6 +548,7 @@ function HistoryTab({ memberId }) {
 function ClosureModal({ member, onClose, onConfirm }) {
   const D = window.PMData;
   const { won } = D;
+  const isMobile = window.useMobile ? window.useMobile() : false;
   const [type, setType] = React.useState("폐업");
   const [processDate, setProcessDate] = React.useState("2026-06-24");
   const [docNo, setDocNo] = React.useState("");
@@ -553,7 +558,7 @@ function ClosureModal({ member, onClose, onConfirm }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:460, background:"var(--white)", borderRadius:"var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width: isMobile ? "calc(100vw - 24px)" : 460, maxWidth:"100vw", background:"var(--white)", borderRadius: isMobile ? "16px 16px 0 0" : "var(--radius-xl)", boxShadow:"var(--shadow-lg)", overflow:"hidden", animation:"pmPop .18s ease", maxHeight: isMobile ? "90vh" : "none", display:"flex", flexDirection:"column" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"20px 24px", borderBottom:"1px solid var(--border-subtle)" }}>
           <div style={{ font:"var(--fw-bold) 18px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>폐업 / 이탈 등록</div>
           <button type="button" onClick={onClose} style={{ border:"none", background:"var(--grey-50)", width:34, height:34, borderRadius:"50%", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
