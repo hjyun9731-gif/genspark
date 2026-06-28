@@ -134,10 +134,13 @@ function Upload({ onApply }) {
 
   if (stage === "done") {
     const isArrears = applied.type === "arrears";
+    const unmatchedNonZero = (applied.unmatched||[]).filter(r=>r.amount!==0).length;
+    const unmatchedZero = (applied.unmatched||[]).filter(r=>r.amount===0).length;
     const statCards = isArrears ? [
       ["미수항목 추가", applied.inserted ?? 0, "var(--green-500)"],
-      ["0원 제외", applied.zero_count ?? 0, "var(--text-tertiary)"],
-      ["미매칭", applied.unmatched_count ?? (applied.errors||[]).length, "var(--red-500)"],
+      ["0원 미수항목 제외", applied.zero_count ?? 0, "var(--text-tertiary)"],
+      ["회원 미매칭", unmatchedNonZero, unmatchedNonZero>0?"var(--red-500)":"var(--text-tertiary)"],
+      ...(unmatchedZero > 0 ? [["0원+회원 미매칭", unmatchedZero, "var(--amber-600)"]] : []),
     ] : [
       ["회원 신규 추가", applied.inserted ?? 0, "var(--green-500)"],
       ["정보 수정", applied.updated ?? 0, "var(--brand)"],

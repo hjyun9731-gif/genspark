@@ -275,11 +275,26 @@ def _sigun_from_text(text: str) -> str:
     return "미분류"
 
 
+# 차량번호 지역 접두어 패턴 (강원98아1523호 → 98아1523)
+_REGION_PREFIX_RE = re.compile(
+    r"^(강원|서울|경기|인천|부산|대구|대전|광주|울산|세종|경남|경북|전남|전북|충남|충북|제주"
+    r"|강릉|원주|춘천|동해|태백|속초|삼척|홍천|횡성|영월|평창|정선|철원|화천|양구|인제|고성|양양"
+    r"|수원|성남|의정부|안양|부천|광명|평택|동두천|안산|고양|과천|구리|남양주|오산|시흥|군포|의왕"
+    r"|하남|용인|파주|이천|안성|김포|화성|광주|여주|양평|동두천)\s*"
+)
+
+
 def _vehicle_norm(vehicle: str) -> str:
     s = _clean(vehicle)
     s = s.replace("호", "")
+    s = _REGION_PREFIX_RE.sub("", s)  # 지역 접두어 제거 (강원98아1523 → 98아1523)
     s = re.sub(r"[\s\-_/.,()\[\]]+", "", s)
     return s
+
+
+def _vehicle_digits_only(vehicle: str) -> str:
+    """차량번호에서 숫자만 추출 (98-2040 형식 대응 최후 수단)."""
+    return re.sub(r"\D", "", _clean(vehicle))
 
 
 def _vehicle_last4(vehicle: str) -> str:
@@ -611,53 +626,99 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
 
 
 def _name_normalize(name: str) -> str:
-    """법인명/특수문자 정규화 (매칭용): 공백제거, ㈜/(주)/주식회사 제거, 괄호 제거."""
+    """법인명/특수문자 정규화 (매칭용).
+    공백·㈜/(주)/주식회사·유한회사·협동조합·대표자 표기·괄호·콜론 제거.
+    화면 표시 이름은 원본 그대로 유지 — 매칭 키 생성에만 사용.
+    """
     s = re.sub(r"\s+", "", _clean(name))
-    s = s.replace("㈜", "").replace("(주)", "").replace("（주）", "").replace("(株)", "").replace("（株）", "")
-    s = re.sub(r"주식회사", "", s)
-    s = re.sub(r"[（）()【】\[\]《》〈〉「」]", "", s)
+    for tok in ["㈜", "(주)", "（주）", "(株)", "（株）"]:
+        s = s.replace(tok, "")
+    s = re.sub(r"주식회사|유한회사|협동조합|합자회사|합명회사", "", s)
+    # 법인 대표자 표기 제거: "대표이사홍길동", "(대표:홍길동)" 등
+    s = re.sub(r"대표이사|대표:", "", s)
+    s = re.sub(r"[（）()【】\[\]《》〈〉「」:：]", "", s)
     return s.lower()
 
 
-def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member], dict[tuple[str, str], Member]]:
+# 이름 부분일치 + 차량뒷4자리 검색용 튜플 타입
+_SubstrEntry = tuple[str, str, str, "Member"]  # (norm_name, last4, digits_only, member)
+
+
+def _member_match_maps(
+    db: Session,
+) -> tuple[dict[str, Member], dict[tuple[str, str], Member], dict[tuple[str, str], Member], list[_SubstrEntry]]:
     by_vehicle: dict[str, Member] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
     by_normname_last4: dict[tuple[str, str], Member] = {}
+    substr_list: list[_SubstrEntry] = []
+
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
             by_vehicle[vn] = member
         last4 = _vehicle_last4(member.vehicle_no)
+        digits = _vehicle_digits_only(member.vehicle_no)
         nm = _person_name(member.name)
         if nm and last4:
             by_name_last4[(nm, last4)] = member
             norm_nm = _name_normalize(nm)
             if norm_nm:
                 by_normname_last4[(norm_nm, last4)] = member
-    return by_vehicle, by_name_last4, by_normname_last4
+        # 부분일치·숫자전용 매칭용 목록 (이름 없어도 차량번호 있으면 포함)
+        substr_list.append((_name_normalize(nm) if nm else "", last4, digits, member))
+
+    return by_vehicle, by_name_last4, by_normname_last4, substr_list
 
 
 def _find_member_from_maps(
     by_vehicle: dict[str, Member],
     by_name_last4: dict[tuple[str, str], Member],
     by_normname_last4: dict[tuple[str, str], Member],
+    substr_list: list[_SubstrEntry],
     name: str,
     vehicle_no: str,
 ) -> Member | None:
-    # 1단계: 차량번호 전체 일치
+    """5단계 매칭:
+    1) 차량번호 전체 정규화(지역접두어 제거) 일치
+    2) 이름 정확일치 + 차량뒷4자리
+    3) 이름 정규화(법인명/대표자 제거) 정확일치 + 차량뒷4자리
+    4) 이름 정규화 부분일치(포함관계) + 차량뒷4자리  ← 법인명+대표자 붙임 형식 처리
+    5) 차량번호 숫자만 일치 + 이름 정규화 부분일치  ← 98-2040 형식 처리
+    """
+    # 1단계: 차량번호 전체 정규화 일치
     vn = _vehicle_norm(vehicle_no)
     if vn and vn in by_vehicle:
         return by_vehicle[vn]
+
     last4 = _vehicle_last4(vehicle_no)
     nm = _person_name(name)
+
     if nm and last4:
         # 2단계: 이름 정확일치 + 차량뒷4자리
         if (nm, last4) in by_name_last4:
             return by_name_last4[(nm, last4)]
-        # 3단계: 이름 정규화(법인명/괄호 제거) + 차량뒷4자리
+        # 3단계: 이름 정규화 정확일치 + 차량뒷4자리
         norm_nm = _name_normalize(nm)
         if norm_nm and (norm_nm, last4) in by_normname_last4:
             return by_normname_last4[(norm_nm, last4)]
+        # 4단계: 이름 정규화 부분일치(포함관계) + 차량뒷4자리
+        if norm_nm:
+            for db_norm, db_last4, _, member in substr_list:
+                if db_last4 == last4 and db_norm and (norm_nm in db_norm or db_norm in norm_nm):
+                    return member
+
+    # 5단계: 차량번호 숫자만 일치 + 이름 정규화 부분일치 (98-2040 형식 대응)
+    if last4:
+        q_digits = _vehicle_digits_only(vehicle_no)
+        norm_nm2 = _name_normalize(nm) if nm else ""
+        if q_digits and len(q_digits) >= 6:
+            for db_norm, db_last4, db_digits, member in substr_list:
+                if db_last4 == last4 and db_digits == q_digits:
+                    if not norm_nm2 or not db_norm:
+                        continue
+                    if norm_nm2 in db_norm or db_norm in norm_nm2:
+                        return member
+
     return None
 
 
@@ -679,9 +740,9 @@ async def preview_import(file_type: str = Form(...), file: UploadFile = File(...
             }
         if file_type == "arrears":
             rows = _iter_arrears_rows(data, preview_limit=300)
-            by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
+            by_vehicle, by_name_last4, by_normname_last4, substr_list = _member_match_maps(db)
             for r in rows:
-                member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, r.get("성명", ""), r.get("차량번호", ""))
+                member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, substr_list, r.get("성명", ""), r.get("차량번호", ""))
                 r["매칭상태"] = "매칭" if member else "미매칭"
                 r["매칭된 회원명"] = member.name if member else ""
                 r["매칭된 차량번호"] = member.vehicle_no if member else ""
@@ -740,14 +801,14 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
         next_no = _current_max_member_no(db) + 1
         used_ids = set(db.scalars(select(Member.id)).all())
         used_mgmt: set[str] = {x for x in db.scalars(select(Member.mgmt_no)).all() if x}
-        by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
+        by_vehicle, by_name_last4, by_normname_last4, substr_list = _member_match_maps(db)
         for row in rows:
             vehicle = row["차량번호"]
             name = row["성명"]
             if not _valid_vehicle(vehicle) or not name:
                 skipped += 1
                 continue
-            existing = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, name, vehicle)
+            existing = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, substr_list, name, vehicle)
             membership = row["가입여부"]
             item = charge_item(membership)
             cert_date = _parse_date(row.get("자격증명 발급일자"))
@@ -835,15 +896,16 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
         inserted = 0
         zero_count = 0
         unmatched_rows: list[dict] = []
-        by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
+        by_vehicle, by_name_last4, by_normname_last4, substr_list = _member_match_maps(db)
         for row in rows:
-            member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, row["성명"], row["차량번호"])
+            member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, substr_list, row["성명"], row["차량번호"])
             if not member:
+                amt_val = row.get("현재 미수금액", 0) or 0
                 unmatched_rows.append({
                     "name": row["성명"],
                     "vehicle": row["차량번호"],
-                    "amount": row.get("현재 미수금액", 0),
-                    "reason": "DB 회원 미매칭",
+                    "amount": amt_val,
+                    "reason": "0원 (회원 미매칭)" if amt_val == 0 else "회원 미매칭",
                 })
                 continue
 
