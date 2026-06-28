@@ -50,8 +50,7 @@ function TabRegional({ members, exclusionRules, onToast }) {
   const isMobile = window.useMobile ? window.useMobile() : false;
   const [filterOpen, setFilterOpen] = React.useState(!isMobile);
   const [regions, setRegions] = React.useState([]);
-  const [charges, setCharges] = React.useState(["협회비","관리비"]);
-  const [senior, setSenior] = React.useState(true);
+  const [charges, setCharges] = React.useState(["협회비","관리비","70세"]);
   const [incZero, setIncZero] = React.useState(true);
   const [incPrepaid, setIncPrepaid] = React.useState(true);
   const [minAmt, setMinAmt] = React.useState(0);
@@ -66,8 +65,8 @@ function TabRegional({ members, exclusionRules, onToast }) {
   const filtered = React.useMemo(() => members.filter(m => {
     if (m.status !== "정상") return false;
     if (regions.length && !regions.includes(m.sigun)) return false;
-    if (!charges.includes(m.chargeItem)) return false;
-    if (!senior && m.isSenior) return false;
+    const ci = m.chargeItem || m.charge_item || "협회비";
+    if (!charges.includes(ci)) return false;
     const out = D.outstanding(m);
     if (!incZero && out===0) return false;
     if (!incPrepaid && out<0) return false;
@@ -75,7 +74,7 @@ function TabRegional({ members, exclusionRules, onToast }) {
     if (maxAmt !== null && !isNaN(maxAmt) && out>maxAmt) return false;
     if (excludeGiro && isExcludedByRules(m, exclusionRules, "지로희망")) return false;
     return true;
-  }), [members,regions,charges,senior,incZero,incPrepaid,minAmt,maxAmt,excludeGiro,exclusionRules]);
+  }), [members,regions,charges,incZero,incPrepaid,minAmt,maxAmt,excludeGiro,exclusionRules]);
 
   const groups = React.useMemo(() => {
     const order = REGIONS.filter(r => !regions.length || regions.includes(r));
@@ -117,8 +116,7 @@ function TabRegional({ members, exclusionRules, onToast }) {
           </div>
           <div style={sectionTitle}>부과항목</div>
           <div style={{ display:"flex", gap:7, marginBottom:8, flexWrap:"wrap" }}>
-            {["협회비","관리비"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
-            <RChip active={senior} onClick={()=>setSenior(!senior)}>70세 포함</RChip>
+            {["협회비","관리비","70세"].map(c=><RChip key={c} active={charges.includes(c)} onClick={()=>toggleCharge(c)}>{c}</RChip>)}
           </div>
           <div style={{ height:1, background:"var(--border-subtle)", margin:"14px 0" }} />
           <div style={sectionTitle}>금액 기준</div>
@@ -243,14 +241,14 @@ function TabSms({ members, exclusionRules, onToast }) {
   const isMobile = window.useMobile ? window.useMobile() : false;
   const [filterOpen, setFilterOpen] = React.useState(!isMobile);
   const [regions, setRegions] = React.useState([]);
-  const [minAmt, setMinAmt] = React.useState(30000);
-  const [minAmtInput, setMinAmtInput] = React.useState("30000");
+  const [minAmt, setMinAmt] = React.useState(0);
+  const [minAmtInput, setMinAmtInput] = React.useState("");
   const [maxAmtInput, setMaxAmtInput] = React.useState("");
-  const [excludeNoPhone, setExcludeNoPhone] = React.useState(true);
-  const [excludeDisconnected, setExcludeDisconnected] = React.useState(true);
-  const [excludeAutoPay, setExcludeAutoPay] = React.useState(true);
-  const [excludeGiro, setExcludeGiro] = React.useState(true);
-  const [excludeSms, setExcludeSms] = React.useState(true);
+  const [excludeNoPhone, setExcludeNoPhone] = React.useState(false);
+  const [excludeDisconnected, setExcludeDisconnected] = React.useState(false);
+  const [excludeAutoPay, setExcludeAutoPay] = React.useState(false);
+  const [excludeGiro, setExcludeGiro] = React.useState(false);
+  const [excludeSms, setExcludeSms] = React.useState(false);
 
   const toggleRegion = r => setRegions(rs => rs.includes(r) ? rs.filter(x=>x!==r) : [...rs,r]);
   const maxAmt = maxAmtInput !== "" ? parseInt(maxAmtInput, 10) : null;
@@ -428,13 +426,15 @@ function TabAltoran({ members, exclusionRules, onToast }) {
   );
   const [regions, setRegions] = React.useState([]);
   const [charges, setCharges] = React.useState(["협회비","관리비","70세"]);
-  const [minAmtInput, setMinAmtInput] = React.useState("30000");
-  const [minAmt, setMinAmt] = React.useState(30000);
+  const [minAmtInput, setMinAmtInput] = React.useState("");
+  const [minAmt, setMinAmt] = React.useState(0);
   const [maxAmtInput, setMaxAmtInput] = React.useState("");
-  const [excludeNoPhone, setExcludeNoPhone] = React.useState(true);
-  const [excludeJiro, setExcludeJiro] = React.useState(true);
-  const [excludeSms, setExcludeSms] = React.useState(true);
+  const [excludeNoPhone, setExcludeNoPhone] = React.useState(false);
+  const [excludeJiro, setExcludeJiro] = React.useState(false);
+  const [excludeSms, setExcludeSms] = React.useState(false);
   const [excludeAuto, setExcludeAuto] = React.useState(false);
+  const [excludeZeroAmt, setExcludeZeroAmt] = React.useState(false);
+  const [excludePrepaidAmt, setExcludePrepaidAmt] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
 
   const toggleRegion = r => setRegions(rs => rs.includes(r) ? rs.filter(x=>x!==r) : [...rs,r]);
@@ -448,7 +448,8 @@ function TabAltoran({ members, exclusionRules, onToast }) {
       const ci = m.chargeItem || m.charge_item || "협회비";
       if (!charges.includes(ci)) return false;
       const amt = D.outstanding ? D.outstanding(m) : (m.arrears_amount ?? m.totalArrears ?? 0);
-      if (amt <= 0) return false;
+      if (excludeZeroAmt && amt === 0) return false;
+      if (excludePrepaidAmt && amt < 0) return false;
       if (minAmt && amt < minAmt) return false;
       if (mxAmt !== null && !isNaN(mxAmt) && amt > mxAmt) return false;
       if (excludeNoPhone && !m.phone) return false;
@@ -457,7 +458,7 @@ function TabAltoran({ members, exclusionRules, onToast }) {
       if (excludeAuto && (isExcludedByRules(m, rulesList, "자동이체") || m.note==="자동이체")) return false;
       return true;
     });
-  }, [regions, charges, minAmt, maxAmtInput, excludeNoPhone, excludeJiro, excludeSms, excludeAuto]);
+  }, [regions, charges, minAmt, maxAmtInput, excludeNoPhone, excludeJiro, excludeSms, excludeAuto, excludeZeroAmt, excludePrepaidAmt]);
 
   const eligible = React.useMemo(() => applyFilters(members, exclusionRules), [members, exclusionRules, applyFilters]);
 
@@ -607,6 +608,8 @@ function TabAltoran({ members, exclusionRules, onToast }) {
           <div style={{ height:1, background:"var(--border-subtle)", margin:"10px 0 4px" }} />
 
           <div style={sectionTitle}>제외 조건</div>
+          <OptToggle label="0원(완납) 제외" checked={excludeZeroAmt} onChange={setExcludeZeroAmt} />
+          <OptToggle label="선납(초과납부) 제외" checked={excludePrepaidAmt} onChange={setExcludePrepaidAmt} />
           <OptToggle label="핸드폰 없는 회원 제외" checked={excludeNoPhone} onChange={setExcludeNoPhone} />
           <OptToggle label="지로희망자 제외" sub="DB 제외 규칙 기준" checked={excludeJiro} onChange={setExcludeJiro} />
           <OptToggle label="문자제외자 제외" sub="DB 제외 규칙 기준" checked={excludeSms} onChange={setExcludeSms} />

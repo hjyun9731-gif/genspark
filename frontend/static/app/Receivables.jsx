@@ -70,14 +70,14 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
   const [region, setRegion] = React.useState("");
   const [membership, setMembership] = React.useState("");
   const [account, setAccount] = React.useState("");
-  const [amount, setAmount] = React.useState("미수있음");
-  const [status, setStatus] = React.useState("정상");
+  const [amount, setAmount] = React.useState("전체");
+  const [status, setStatus] = React.useState("전체");
   const [special, setSpecial] = React.useState("");
   const [sort, setSort] = React.useState({ key:"outstanding", dir:"desc" });
   const [minAmt, setMinAmt] = React.useState("");
   const [maxAmt, setMaxAmt] = React.useState("");
-  const [inclZero, setInclZero] = React.useState(false);
-  const [inclPrepaid, setInclPrepaid] = React.useState(false);
+  const [inclZero, setInclZero] = React.useState(true);
+  const [inclPrepaid, setInclPrepaid] = React.useState(true);
 
   // 서버사이드 페이지네이션
   const [page, setPage] = React.useState(1);
@@ -94,9 +94,9 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     setAmount(drill.amount || "전체");
     setRegion(drill.region || "");
     setSpecial(drill.special || "");
-    setStatus(drill.status || "정상");
+    setStatus(drill.status || "전체");
     setMembership(""); setAccount(""); setQuery("");
-    setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false);
+    setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true);
     setPage(1);
   }, [drill]);
 
@@ -255,7 +255,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     }).length;
   };
 
-  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("미수있음"); setStatus("정상"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(false); setInclPrepaid(false); setPage(1); }
+  function resetFilters(){ setQuery(""); setRegion(""); setMembership(""); setAccount(""); setAmount("전체"); setStatus("전체"); setSpecial(""); setSort({key:"outstanding",dir:"desc"}); setMinAmt(""); setMaxAmt(""); setInclZero(true); setInclPrepaid(true); setPage(1); }
 
   function exportCSV(){
     const head = ["지역","차량번호","이름","계정","부과기준일","기준월","미수개월수","원장미수","수납합계","현재잔액","핸드폰번호","주소","처리상태"];
@@ -346,7 +346,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
                 <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
                 <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
                 <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
-                <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
+                <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["전체","정상","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
               </div>
               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                 <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월↑</Chip>
@@ -393,7 +393,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
             <FilterDropdown label="지역" value={region} onChange={(v)=>{setRegion(v);setPage(1);}} options={["", ...D.REGIONS]} render={v=>v||"전체 지역"} />
             <FilterDropdown label="가입" value={membership} onChange={(v)=>{setMembership(v);setPage(1);}} options={["","협회가입","협회미가입"]} render={v=>v||"가입/미가입"} />
             <FilterDropdown label="계정" value={account} onChange={(v)=>{setAccount(v);setPage(1);}} options={["","협회비","관리비"]} render={v=>v||"계정 전체"} />
-            <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["정상","전체","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
+            <FilterDropdown label="상태" value={status} onChange={(v)=>{setStatus(v);setPage(1);}} options={["전체","정상","폐업","양도","이관","탈퇴"]} render={v=>v==="전체"?"상태 전체":v} />
             <DivLine/>
             <Chip active={special==="장기"} onClick={()=>{setSpecial(special==="장기"?"":"장기");setPage(1);}}>12개월 이상</Chip>
             <Chip active={special==="70세"} onClick={()=>setSpecial(special==="70세"?"":"70세")}>70세</Chip>
