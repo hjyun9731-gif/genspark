@@ -3,9 +3,14 @@ const { Icon } = window.PayroleDesignSystem_9db006;
 
 function _cleanMemo(raw) {
   if (!raw) return "";
-  const STRUCTURED = /^(?:주소|공문\s*주소|주민등록번호|주민번호|핸드폰번호?|전화번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
+  const FORBIDDEN = /(?:주소|공문\s*주소|핸드폰(?:번호)?|전화번호|주민등록번호|주민번호|자격증명\s*(?:발급\s*)?번호|자격번호)\s*[:：]/;
   const EMPTY = /^[-\s]*$|^nan$|^None$/i;
-  return raw.split(/\r?\n|\//).map(p => p.trim()).filter(p => p && !STRUCTURED.test(p) && !EMPTY.test(p)).join("\n").trim();
+  return raw
+    .split(/\r?\n|\//)
+    .map(p => p.trim())
+    .filter(p => p && !FORBIDDEN.test(p) && !EMPTY.test(p))
+    .join("\n")
+    .trim();
 }
 function _relatedName(memo) {
   if (!memo) return "";
