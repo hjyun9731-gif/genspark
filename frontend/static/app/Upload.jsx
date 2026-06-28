@@ -122,9 +122,31 @@ function Upload({ onApply }) {
     </div>
   ) : null;
 
+  const downloadUnmatched = (rows) => {
+    const header = "이름,차량번호,미수금액,사유";
+    const body = rows.map(r => `${r.name},${r.vehicle},${r.amount},${r.reason}`).join("\n");
+    const blob = new Blob(["﻿" + header + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "미매칭목록.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (stage === "done") {
+    const isArrears = applied.type === "arrears";
+    const statCards = isArrears ? [
+      ["미수항목 추가", applied.inserted ?? 0, "var(--green-500)"],
+      ["0원 제외", applied.zero_count ?? 0, "var(--text-tertiary)"],
+      ["미매칭", applied.unmatched_count ?? (applied.errors||[]).length, "var(--red-500)"],
+    ] : [
+      ["회원 신규 추가", applied.inserted ?? 0, "var(--green-500)"],
+      ["정보 수정", applied.updated ?? 0, "var(--brand)"],
+      ["반영 제외", applied.skipped ?? 0, "var(--text-tertiary)"],
+    ];
+    const unmatchedList = applied.unmatched || [];
+
     return (
-      <div style={{ maxWidth:560, margin:"40px auto 0" }}>
+      <div style={{ maxWidth:640, margin:"40px auto 0", display:"flex", flexDirection:"column", gap:16 }}>
         <ErrorBar />
         <Card>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, padding:"20px 10px 8px", textAlign:"center" }}>
@@ -133,29 +155,71 @@ function Upload({ onApply }) {
             <div>
               <div style={{ font:"var(--fw-bold) 20px/1.3 var(--font-sans)", color:"var(--text-primary)" }}>반영이 완료되었습니다</div>
               <div style={{ font:"var(--body-sm)", color:"var(--text-secondary)", marginTop:6 }}>{ft.label} · 기존 데이터는 유지되고 변경사항만 업데이트되었습니다.</div>
+              {isArrears && (
+                <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:4 }}>
+                  ※ 미수항목 추가 = 회원과 연결된 미수금 레코드 수 (회원 신규 생성 없음)
+                </div>
+              )}
             </div>
             <div style={{ display:"flex", gap:10, width:"100%", marginTop:6 }}>
-              {[
-                ["신규 추가", applied.inserted ?? 0, "var(--green-500)"],
-                ["정보 수정", applied.updated ?? 0, "var(--brand)"],
-                ["반영 제외", applied.skipped ?? 0, "var(--text-tertiary)"],
-              ].map(([l,v,c]) => (
+              {statCards.map(([l,v,c]) => (
                 <div key={l} style={{ flex:1, padding:"14px", borderRadius:"var(--radius-md)", background:"var(--grey-25)", textAlign:"center" }}>
                   <div style={{ font:"var(--fw-bold) 24px/1 var(--font-sans)", color:c }}>{v}</div>
                   <div style={{ font:"var(--body-xs)", color:"var(--text-tertiary)", marginTop:4 }}>{l}건</div>
                 </div>
               ))}
             </div>
-            {(applied.errors||[]).length > 0 && (
-              <div style={{ width:"100%", padding:"12px 14px", background:"var(--amber-50)", borderRadius:"var(--radius-md)", textAlign:"left", font:"var(--body-xs)", color:"#946012", lineHeight:1.8 }}>
-                <b>미매칭/오류 ({applied.errors.length}건):</b><br/>
-                {applied.errors.slice(0,10).join("\n")}
-                {applied.errors.length > 10 && `\n… 외 ${applied.errors.length-10}건`}
-              </div>
-            )}
             <Button variant="primary" size="medium" onClick={reset}>새 파일 업로드</Button>
           </div>
         </Card>
+
+        {isArrears && unmatchedList.length > 0 && (
+          <Card padded={false}>
+            <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid var(--border-subtle)" }}>
+              <div style={{ font:"var(--fw-demibold) 14px/1.3 var(--font-sans)", color:"var(--red-600)" }}>
+                미매칭 목록 ({unmatchedList.length}건)
+              </div>
+              <button
+                onClick={() => downloadUnmatched(unmatchedList)}
+                style={{ font:"var(--body-xs)", color:"var(--brand)", background:"none", border:"1px solid var(--brand)", borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>
+                CSV 다운로드
+              </button>
+            </div>
+            <div style={{ overflow:"auto", maxHeight:320 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:"var(--grey-25)" }}>
+                    {["이름","차량번호","미수금액","사유"].map(h => (
+                      <th key={h} style={{ padding:"8px 14px", textAlign: h==="미수금액"?"right":"left", font:"var(--fw-demibold) 11px/1 var(--font-sans)", color:"var(--text-tertiary)", whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unmatchedList.map((r,i) => (
+                    <tr key={i} style={{ borderTop:"1px solid var(--border-subtle)" }}>
+                      <td style={{ padding:"8px 14px", font:"var(--fw-demibold) 13px/1 var(--font-sans)" }}>{r.name}</td>
+                      <td style={{ padding:"8px 14px", font:"var(--body-sm)", color:"var(--text-secondary)" }}>{r.vehicle}</td>
+                      <td style={{ padding:"8px 14px", font:"var(--body-sm)", textAlign:"right", color: r.amount<0?"var(--violet-500)":r.amount>0?"var(--red-500)":"var(--text-tertiary)" }}>
+                        {r.amount===0?"0원":(r.amount<0?"-":"")+Math.abs(r.amount).toLocaleString("ko-KR")+"원"}
+                      </td>
+                      <td style={{ padding:"8px 14px", font:"var(--body-xs)", color:"var(--text-tertiary)" }}>{r.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        {!isArrears && (applied.errors||[]).length > 0 && (
+          <Card>
+            <div style={{ font:"var(--body-xs)", color:"#946012", lineHeight:1.8 }}>
+              <b>오류 ({applied.errors.length}건):</b><br/>
+              {applied.errors.slice(0,10).join("\n")}
+              {applied.errors.length > 10 && `\n… 외 ${applied.errors.length-10}건`}
+            </div>
+          </Card>
+        )}
       </div>
     );
   }

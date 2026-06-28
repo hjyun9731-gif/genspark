@@ -610,9 +610,19 @@ def _iter_deposit_rows(file_bytes: bytes, preview_limit: int | None = None) -> l
     return rows
 
 
-def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member]]:
+def _name_normalize(name: str) -> str:
+    """법인명/특수문자 정규화 (매칭용): 공백제거, ㈜/(주)/주식회사 제거, 괄호 제거."""
+    s = re.sub(r"\s+", "", _clean(name))
+    s = s.replace("㈜", "").replace("(주)", "").replace("（주）", "").replace("(株)", "").replace("（株）", "")
+    s = re.sub(r"주식회사", "", s)
+    s = re.sub(r"[（）()【】\[\]《》〈〉「」]", "", s)
+    return s.lower()
+
+
+def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, str], Member], dict[tuple[str, str], Member]]:
     by_vehicle: dict[str, Member] = {}
     by_name_last4: dict[tuple[str, str], Member] = {}
+    by_normname_last4: dict[tuple[str, str], Member] = {}
     for member in db.scalars(select(Member)).all():
         vn = _vehicle_norm(member.vehicle_no)
         if vn:
@@ -621,16 +631,33 @@ def _member_match_maps(db: Session) -> tuple[dict[str, Member], dict[tuple[str, 
         nm = _person_name(member.name)
         if nm and last4:
             by_name_last4[(nm, last4)] = member
-    return by_vehicle, by_name_last4
+            norm_nm = _name_normalize(nm)
+            if norm_nm:
+                by_normname_last4[(norm_nm, last4)] = member
+    return by_vehicle, by_name_last4, by_normname_last4
 
 
-def _find_member_from_maps(by_vehicle: dict[str, Member], by_name_last4: dict[tuple[str, str], Member], name: str, vehicle_no: str) -> Member | None:
+def _find_member_from_maps(
+    by_vehicle: dict[str, Member],
+    by_name_last4: dict[tuple[str, str], Member],
+    by_normname_last4: dict[tuple[str, str], Member],
+    name: str,
+    vehicle_no: str,
+) -> Member | None:
+    # 1단계: 차량번호 전체 일치
     vn = _vehicle_norm(vehicle_no)
     if vn and vn in by_vehicle:
         return by_vehicle[vn]
-    key = (_person_name(name), _vehicle_last4(vehicle_no))
-    if key[0] and key[1]:
-        return by_name_last4.get(key)
+    last4 = _vehicle_last4(vehicle_no)
+    nm = _person_name(name)
+    if nm and last4:
+        # 2단계: 이름 정확일치 + 차량뒷4자리
+        if (nm, last4) in by_name_last4:
+            return by_name_last4[(nm, last4)]
+        # 3단계: 이름 정규화(법인명/괄호 제거) + 차량뒷4자리
+        norm_nm = _name_normalize(nm)
+        if norm_nm and (norm_nm, last4) in by_normname_last4:
+            return by_normname_last4[(norm_nm, last4)]
     return None
 
 
@@ -652,9 +679,9 @@ async def preview_import(file_type: str = Form(...), file: UploadFile = File(...
             }
         if file_type == "arrears":
             rows = _iter_arrears_rows(data, preview_limit=300)
-            by_vehicle, by_name_last4 = _member_match_maps(db)
+            by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
             for r in rows:
-                member = _find_member_from_maps(by_vehicle, by_name_last4, r.get("성명", ""), r.get("차량번호", ""))
+                member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, r.get("성명", ""), r.get("차량번호", ""))
                 r["매칭상태"] = "매칭" if member else "미매칭"
                 r["매칭된 회원명"] = member.name if member else ""
                 r["매칭된 차량번호"] = member.vehicle_no if member else ""
@@ -713,14 +740,14 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
         next_no = _current_max_member_no(db) + 1
         used_ids = set(db.scalars(select(Member.id)).all())
         used_mgmt: set[str] = {x for x in db.scalars(select(Member.mgmt_no)).all() if x}
-        by_vehicle, by_name_last4 = _member_match_maps(db)
+        by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
         for row in rows:
             vehicle = row["차량번호"]
             name = row["성명"]
             if not _valid_vehicle(vehicle) or not name:
                 skipped += 1
                 continue
-            existing = _find_member_from_maps(by_vehicle, by_name_last4, name, vehicle)
+            existing = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, name, vehicle)
             membership = row["가입여부"]
             item = charge_item(membership)
             cert_date = _parse_date(row.get("자격증명 발급일자"))
@@ -805,15 +832,19 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
 
     if file_type == "arrears":
         rows = _iter_arrears_rows(data, preview_limit=None)
-        inserted = updated = skipped = 0
-        unmatched: list[str] = []
-        by_vehicle, by_name_last4 = _member_match_maps(db)
+        inserted = 0
+        zero_count = 0
+        unmatched_rows: list[dict] = []
+        by_vehicle, by_name_last4, by_normname_last4 = _member_match_maps(db)
         for row in rows:
-            member = _find_member_from_maps(by_vehicle, by_name_last4, row["성명"], row["차량번호"])
+            member = _find_member_from_maps(by_vehicle, by_name_last4, by_normname_last4, row["성명"], row["차량번호"])
             if not member:
-                skipped += 1
-                if len(unmatched) < 80:
-                    unmatched.append(f"미매칭: {row['성명']} / {row['차량번호']} / {row.get('현재 미수금액', 0):,}원")
+                unmatched_rows.append({
+                    "name": row["성명"],
+                    "vehicle": row["차량번호"],
+                    "amount": row.get("현재 미수금액", 0),
+                    "reason": "DB 회원 미매칭",
+                })
                 continue
 
             # 2026미수금 파일의 비고는 회원 원장의 비고와 별개로 반드시 회원 메모에 합쳐 저장한다.
@@ -829,14 +860,25 @@ async def commit_import(file_type: str = Form(...), file: UploadFile = File(...)
             amt = _money_signed(row.get("현재 미수금액") or row.get("미수금액"))
             ym = row.get("마지막 미수 기준월") or row.get("기준월") or "2026-현재"
             if amt == 0:
-                skipped += 1
+                zero_count += 1
                 continue
             db.add(ReceivableItem(member_id=member.id, ym=ym, charge_item=member.charge_item, amount=amt, is_paid=False))
             inserted += 1
             if inserted % 500 == 0:
                 db.commit()
         db.commit()
-        return {"ok": True, "filename": file.filename, "type": "arrears", "inserted": inserted, "updated": updated, "skipped": skipped, "errors": unmatched}
+        return {
+            "ok": True,
+            "filename": file.filename,
+            "type": "arrears",
+            "inserted": inserted,
+            "updated": 0,
+            "zero_count": zero_count,
+            "unmatched_count": len(unmatched_rows),
+            "unmatched": unmatched_rows,
+            "skipped": zero_count + len(unmatched_rows),
+            "errors": [f"미매칭: {r['name']} / {r['vehicle']} / {r['amount']:,}원" for r in unmatched_rows],
+        }
 
     if file_type == "deposits":
         rows = _iter_deposit_rows(data, preview_limit=None)
