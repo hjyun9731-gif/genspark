@@ -255,6 +255,7 @@ def list_members(
         response.headers["X-Unpaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) > 0))
         response.headers["X-Zero-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) == 0))
         response.headers["X-Prepaid-Count"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) < 0))
+        response.headers["X-Prepaid-Balance"] = str(sum(int(x.get("arrears_amount") or 0) for x in filtered if int(x.get("arrears_amount") or 0) < 0))
         response.headers["X-Over-300k"] = str(sum(1 for x in filtered if int(x.get("arrears_amount") or 0) >= 300000))
         response.headers["X-Over-12Months"] = str(sum(1 for x in filtered if int(x.get("arrears_months") or 0) >= 12))
         response.headers["X-Page"] = str(page)

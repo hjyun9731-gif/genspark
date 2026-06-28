@@ -240,7 +240,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
     return list;
   }, [serverRows, membersProp, query, region, membership, account, amount, status, special, sort, inclZero, inclPrepaid, minAmt, maxAmt]);
 
-  const pageSumOut = rows.reduce((s,m)=>s+Math.max(D.outstanding(m),0),0);
+  const pageSumOut = rows.reduce((s,m)=>s+D.outstanding(m),0);
   const sumOut = serverMeta?.totalBalance ?? pageSumOut;
   const over300 = serverMeta?.over300kCount ?? rows.filter(m=>D.outstanding(m)>=300000).length;
   const longCnt = serverMeta?.over12MonthsCount ?? rows.filter(m=>D.arrearsMonths(m)>=12).length;
@@ -537,7 +537,7 @@ function Receivables({ members: membersProp, drill, density, onPay, onSelect, on
           </div>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderTop:"1px solid var(--border-subtle)", background:"var(--grey-25)" }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 기본값은 미납/0원 제외/선납 제외</span>
+              <span style={{ font:"var(--body-xs)", color:"var(--text-tertiary)" }}>이름 클릭 시 상세 · 기본값은 전체 표시 (0원·선납 포함)</span>
               {serverLoading && <span style={{ font:"var(--body-xs)", color:"var(--brand)" }}>조회 중...</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
